@@ -1,0 +1,58 @@
+/* SantéMap — administration (complète app.css) */
+
+body.admin { overflow: auto; height: auto; min-height: 100%; }
+.admin-entete { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 14px; height: 68px; padding: 0 24px; background: #fff; border-bottom: 1px solid var(--line); }
+.admin-entete .brand { flex: 1; }
+.admin-onglets { position: sticky; top: 68px; z-index: 19; display: flex; gap: 6px; padding: 10px 24px; overflow-x: auto; scrollbar-width: none; background: var(--bg); border-bottom: 1px solid var(--line); }
+.admin-onglets::-webkit-scrollbar { display: none; }
+.admin-onglets button { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 14px; border-radius: 12px; font-weight: 600; color: var(--muted); }
+.admin-onglets button:hover { background: #fff; }
+.admin-onglets button.active { background: var(--teal-800); color: #fff; }
+.compteur { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--red-700); color: #fff; font-size: 12px; font-weight: 700; display: inline-grid; place-items: center; }
+.compteur:empty { display: none; }
+.admin-contenu { max-width: 1180px; margin: 0 auto; padding: 24px; }
+.admin-contenu h1 { margin: 0 0 6px; font-size: 26px; font-weight: 800; letter-spacing: -.4px; }
+.barre { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0 18px; }
+.barre .input { height: 44px; max-width: 360px; }
+.barre select.input { max-width: 220px; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; margin-top: 18px; }
+.stat { padding: 18px; border-radius: 18px; background: #fff; box-shadow: var(--shadow-sm); }
+.stat b { display: block; font-size: 30px; font-weight: 800; color: var(--teal-900); }
+.stat span { color: var(--muted); font-size: 14px; }
+.stat.alerte b { color: var(--red-700); }
+.deux-colonnes { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+.barres div { display: grid; grid-template-columns: 170px 1fr 50px; gap: 10px; align-items: center; font-size: 14px; margin-bottom: 8px; }
+.barres i { display: block; height: 10px; border-radius: 999px; background: var(--teal-700); }
+
+.grille-cartes { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.contrib { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 18px; background: #fff; box-shadow: var(--shadow-sm); }
+.contrib-photo { height: 170px; border-radius: 12px; background: var(--teal-50); display: grid; place-items: center; color: var(--muted); overflow: hidden; }
+.contrib-photo img { width: 100%; height: 100%; object-fit: cover; }
+.contrib dl { margin: 0; display: grid; grid-template-columns: 110px 1fr; gap: 4px 10px; font-size: 14px; }
+.contrib dt { color: var(--muted); }
+.contrib dd { margin: 0; }
+.doublons { padding: 10px 12px; border-radius: 12px; background: #fff3d6; color: #6b4600; font-size: 13.5px; }
+.doublons b { display: flex; align-items: center; gap: 6px; }
+
+.tableau { width: 100%; border-collapse: collapse; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: var(--shadow-sm); font-size: 14.5px; }
+.tableau th, .tableau td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.tableau th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); background: var(--teal-50); }
+.tableau tr:last-child td { border-bottom: 0; }
+.tableau .actions { margin: 0; flex-wrap: wrap; }
+.tableau .ms { font-size: 18px; vertical-align: middle; color: var(--teal-800); }
+
+.edition .dialogue-boite { width: min(100%, 760px); }
+.grille-champs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+.grille-champs .large { grid-column: 1 / -1; }
+.cases { display: flex; flex-wrap: wrap; gap: 10px 18px; font-weight: 600; font-size: 14.5px; }
+.horaires-semaine { display: grid; grid-template-columns: 60px 1fr; gap: 6px 10px; align-items: center; font-size: 14px; }
+.horaires-semaine .input { height: 40px; }
+.gardes-liste { display: grid; gap: 6px; }
+.gardes-liste div { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-radius: 10px; background: var(--green-100); font-size: 14px; }
+
+@media (max-width: 760px) {
+    .admin-entete, .admin-onglets, .admin-contenu { padding-left: 14px; padding-right: 14px; }
+    .deux-colonnes, .grille-champs { grid-template-columns: 1fr; }
+    .tableau { display: block; overflow-x: auto; }
+}

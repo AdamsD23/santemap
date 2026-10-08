@@ -1,0 +1,24 @@
+{
+  "name": "santemap",
+  "version": "1.0.0",
+  "description": "Carte des établissements de santé et de bien-être : pharmacies, hôpitaux, cliniques, laboratoires, dentistes…",
+  "author": "Adams Diarra",
+  "license": "MIT",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/api.test.js",
+    "import-osm": "node scripts/import-osm.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "leaflet": "^1.9.4",
+    "mysql2": "^3.11.5"
+  }
+}

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <title>Administration — SantéMap</title>
+    <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400..500,0..1,0&icon_names=add,arrow_back,call,check,close,dashboard,delete,domain,event,flag,group,location_on,logout,map,open_in_new,pending_actions,person,refresh,save,search,verified,warning&display=block">
+    <link rel="stylesheet" href="/assets/app.css">
+    <link rel="stylesheet" href="/assets/admin.css">
+</head>
+<body class="admin">
+<header class="admin-entete">
+    <a class="brand" href="/" aria-label="Retour à SantéMap">
+        <img class="brand-logo" src="/assets/logo.svg" alt="" width="38" height="38">
+        <div class="brand-text"><div class="brand-name">SantéMap</div><div class="brand-place">Administration</div></div>
+    </a>
+    <span id="admin-nom" class="note"></span>
+    <button type="button" class="icon-btn" id="admin-deconnexion" aria-label="Se déconnecter" hidden><span class="ms" aria-hidden="true">logout</span></button>
+</header>
+
+<nav class="admin-onglets" id="onglets" hidden>
+    <button type="button" data-onglet="tableau"><span class="ms" aria-hidden="true">dashboard</span>Tableau de bord</button>
+    <button type="button" data-onglet="contributions"><span class="ms" aria-hidden="true">pending_actions</span>Contributions<span class="compteur" id="nb-contributions"></span></button>
+    <button type="button" data-onglet="etablissements"><span class="ms" aria-hidden="true">domain</span>Établissements</button>
+    <button type="button" data-onglet="rendez-vous"><span class="ms" aria-hidden="true">event</span>Rendez-vous<span class="compteur" id="nb-rdv"></span></button>
+    <button type="button" data-onglet="signalements"><span class="ms" aria-hidden="true">flag</span>Signalements<span class="compteur" id="nb-signalements"></span></button>
+    <button type="button" data-onglet="comptes"><span class="ms" aria-hidden="true">group</span>Comptes</button>
+</nav>
+
+<main class="admin-contenu" id="contenu"></main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="/assets/commun.js"></script>
+<script src="/assets/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "SantéMap — Pharmacies, hôpitaux et cliniques près de vous",
+  "short_name": "SantéMap",
+  "description": "Trouvez la pharmacie, l'hôpital, la clinique ou le laboratoire le plus proche.",
+  "lang": "fr",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f6f7",
+  "theme_color": "#0f4c5c",
+  "icons": [
+    { "src": "/assets/icone-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/assets/icone-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/assets/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

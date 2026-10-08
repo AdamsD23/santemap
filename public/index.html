@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>SantéMap — Pharmacies, hôpitaux et cliniques près de vous</title>
+    <meta name="description" content="Trouvez la pharmacie, l'hôpital, la clinique, le laboratoire ou le dentiste le plus proche, avec les pharmacies de garde et la prise de rendez-vous en ligne.">
+    <meta name="theme-color" content="#0f4c5c">
+    <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/assets/icone-192.png">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400..500,0..1,0&icon_names=accessibility_new,add_a_photo,add_location_alt,admin_panel_settings,arrow_back,biotech,calendar_month,call,check,check_circle,chevron_right,close,dentistry,directions,directions_walk,emergency,error,event_available,explore,format_list_bulleted,info,language,layers,local_hospital,local_pharmacy,location_on,logout,map,medical_services,mic,my_location,near_me,nights_stay,notifications,person,progress_activity,radar,radiology,refresh,schedule,search,search_off,send,share,spa,stethoscope,tune,verified,workspace_premium&display=block">
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+    <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body data-vue="carte">
+<div class="app">
+    <header class="header">
+        <a class="brand" href="#/carte" aria-label="SantéMap, retour à la carte">
+            <img class="brand-logo" src="/assets/logo.svg" alt="" width="38" height="38">
+            <div class="brand-text">
+                <div class="brand-name">SantéMap</div>
+                <div class="brand-place"><span class="ms" aria-hidden="true">near_me</span><span id="lieu">Abidjan</span></div>
+            </div>
+        </a>
+        <button class="icon-btn" id="btn-filtres" type="button" aria-label="Filtres"><span class="ms" aria-hidden="true">tune</span></button>
+        <a class="icon-btn" id="btn-notifs" href="#/notifications" aria-label="Notifications"><span class="ms" aria-hidden="true">notifications</span><span class="dot" hidden></span></a>
+        <a class="avatar" id="btn-avatar" href="#/compte" aria-label="Mon compte"><span class="ms" aria-hidden="true">person</span></a>
+    </header>
+
+    <main class="main">
+        <div id="carte" class="tuiles-claires" role="application" aria-label="Carte des établissements de santé"></div>
+
+        <div class="overlay-top">
+            <form class="search" id="form-recherche" role="search">
+                <span class="ms" aria-hidden="true">search</span>
+                <label class="sr-only" for="recherche">Rechercher un établissement</label>
+                <input id="recherche" type="search" placeholder="Pharmacie, clinique, commune…" autocomplete="off" enterkeyhint="search">
+                <button class="icon-btn" id="btn-micro" type="button" aria-label="Recherche vocale" hidden><span class="ms" aria-hidden="true">mic</span></button>
+                <button class="icon-btn" id="btn-effacer" type="button" aria-label="Effacer la recherche" hidden><span class="ms" aria-hidden="true">close</span></button>
+            </form>
+            <div class="chips" id="chips" role="toolbar" aria-label="Type d'établissement"></div>
+        </div>
+
+        <div class="liste" id="liste" hidden></div>
+
+        <div class="map-tools">
+            <button class="tool" id="btn-localiser" type="button" aria-label="Me localiser"><span class="ms" aria-hidden="true">my_location</span></button>
+            <button class="tool" id="btn-calques" type="button" aria-label="Changer le style de la carte"><span class="ms" aria-hidden="true">layers</span></button>
+            <button class="tool pill" id="btn-rayon" type="button" aria-label="Changer le rayon de recherche"><span class="ms" aria-hidden="true">radar</span><span id="rayon-texte">5 km</span></button>
+        </div>
+        <button class="zone-btn" id="btn-zone" type="button" hidden><span class="ms" aria-hidden="true">refresh</span>Rechercher dans cette zone</button>
+
+        <div class="sheet" id="sheet">
+            <div class="proximite" id="proximite"></div>
+            <article class="card fiche-carte" id="fiche-carte" hidden></article>
+            <div class="urgence-bandeau" id="bandeau-urgence"></div>
+        </div>
+
+        <section class="vue" id="vue" hidden></section>
+    </main>
+
+    <nav class="nav" aria-label="Navigation principale">
+        <a href="#/carte" data-vue="carte"><span class="ms" aria-hidden="true">map</span>Carte</a>
+        <a href="#/liste" data-vue="liste"><span class="ms" aria-hidden="true">format_list_bulleted</span>Liste</a>
+        <a href="#/urgences" data-vue="urgences"><span class="ms" aria-hidden="true">emergency</span>Urgences<span class="badge-dot" aria-hidden="true"></span></a>
+        <a href="#/compte" data-vue="compte"><span class="ms" aria-hidden="true">person</span>Compte</a>
+    </nav>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="/vendor/leaflet/leaflet.js"></script>
+<script src="/assets/commun.js"></script>
+<script src="/assets/app.js"></script>
+</body>
+</html>
