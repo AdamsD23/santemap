@@ -121,6 +121,7 @@
     }
 
     function majIcone(id) {
+        document.querySelectorAll(`#liste-panneau .ligne[data-id="${id}"]`).forEach(l => l.classList.toggle('active', id === etat.selection));
         const m = marqueurs.get(id);
         const e = etat.resultats.find(x => x.id === id);
         if (!m || !e) return;
@@ -179,6 +180,7 @@
         afficherChips();
         afficherMarqueurs();
         afficherProximite();
+        afficherPanneau();
         if (document.body.dataset.vue === 'liste') afficherListe();
         $('#btn-zone').hidden = true;
 
@@ -318,10 +320,20 @@
             : vide('search_off', etat.categorie === 'garde' ? 'Aucune pharmacie de garde renseignée ici aujourd\'hui.' : 'Aucun établissement trouvé. Essayez un rayon plus grand ou une autre recherche.');
     }
 
-    function ligneEtablissement(e) {
+    /** Sur ordinateur, la liste des plus proches occupe le panneau sous la fiche ; un clic les montre sur la carte */
+    function afficherPanneau() {
+        if (estMobile()) return;
+        const proches = etat.resultats.slice(0, 25);
+        $('#liste-panneau').innerHTML = proches.length
+            ? `<h2>Les plus proches</h2>${proches.map(e => ligneEtablissement(e, true)).join('')}`
+            : '';
+    }
+
+    function ligneEtablissement(e, surCarte = false) {
         const cat = categorie(e.categorie);
         const dist = distanceDe(e);
-        return `<a class="ligne" href="#/fiche/${e.id}">
+        const lien = surCarte ? `href="#/carte" data-action="voir" data-id="${e.id}"` : `href="#/fiche/${e.id}"`;
+        return `<a class="ligne${surCarte && e.id === etat.selection ? ' active' : ''}" ${lien}>
             ${vignette(e)}
             <div class="ligne-corps">
                 <div class="ligne-titre">${esc(e.nom)}${e.verifie ? ic('verified', 'fill') : ''}</div>
@@ -1042,6 +1054,11 @@
             if (!cible) return;
             const action = cible.dataset.action;
             if (action === 'fermer-carte') fermerCarte();
+            else if (action === 'voir') {
+                ev.preventDefault();
+                selectionner(Number(cible.dataset.id));
+                $('#sheet').scrollTop = 0;
+            }
             else if (action === 'retour') history.length > 1 ? history.back() : (location.hash = '#/carte');
             else if (action === 'creneau') {
                 etat.creneauChoisi = { date: cible.dataset.date, heure: cible.dataset.heure };

@@ -57,7 +57,7 @@ async function seedDemo() {
         `INSERT INTO etablissements
          (pays, categorie, nom, lat, lng, adresse, commune, telephone, horaires, description, source, verifie, premium,
           services, prix_consultation, rdv_actif, rdv_duree, rdv_horaires, valide_le)
-         VALUES ('CI', 'clinique', ?, 5.3546, -3.9725, ?, 'Cocody', '0700000000', ?, ?, 'demo', TRUE, TRUE, ?, 15000, TRUE, 30, ?, UTC_TIMESTAMP())`,
+         VALUES ('CI', 'clinique', ?, 5.3546, -3.9725, ?, 'Cocody', NULL, ?, ?, 'demo', TRUE, TRUE, ?, 15000, TRUE, 30, ?, UTC_TIMESTAMP())`,
         [
             'Centre médical de démonstration',
             'Riviera Golf (adresse fictive)',
