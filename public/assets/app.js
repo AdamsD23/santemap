@@ -913,6 +913,12 @@
             etat.position = position;
             etat.centre = { ...position };
             etat.autoSelection = true;
+            // « Me localiser » montre ce qui est autour : la recherche en cours est effacée
+            if (manuel && etat.recherche) {
+                etat.recherche = '';
+                $('#recherche').value = '';
+                $('#btn-effacer').hidden = true;
+            }
             fermerCarte(false);
             placerMoi();
             carte.setView([position.lat, position.lng], Math.max(carte.getZoom(), 15));
