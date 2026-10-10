@@ -67,6 +67,7 @@
                 <div class="stat ${s.signalements ? 'alerte' : ''}"><b>${s.signalements}</b><span>signalements à traiter</span></div>
                 <div class="stat ${s.revendications ? 'alerte' : ''}"><b>${s.revendications}</b><span>fiches à revendiquer</span></div>
                 <div class="stat ${s.echanges ? 'alerte' : ''}"><b>${s.echanges}</b><span>échanges de points à traiter</span></div>
+                <div class="stat ${s.budget.mensuel && s.budget.utilise >= s.budget.mensuel ? 'alerte' : ''}"><b>${fcfa(s.budget.utilise)}</b><span>récompenses ce mois-ci${s.budget.mensuel ? ` sur ${fcfa(s.budget.mensuel)}` : ' (sans plafond)'}</span></div>
                 <div class="stat"><b>${s.utilisateurs}</b><span>membres inscrits</span></div>
                 <div class="stat"><b>${s.partenaires}</b><span>établissements partenaires</span></div>
             </div>

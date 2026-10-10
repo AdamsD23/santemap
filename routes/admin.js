@@ -49,9 +49,13 @@ router.get('/stats', route(async (req, res) => {
         (SELECT COUNT(*) FROM etablissements WHERE premium = TRUE) AS partenaires,
         (SELECT COUNT(*) FROM revendications WHERE statut = 'en_attente') AS revendications,
         (SELECT COUNT(*) FROM echanges WHERE statut = 'demande') AS echanges`);
+    const [{ points: pointsMois }] = await query(
+        "SELECT COALESCE(SUM(points), 0) AS points FROM echanges WHERE statut <> 'refuse' AND created_at >= DATE_FORMAT(UTC_TIMESTAMP(), '%Y-%m-01')"
+    );
+    const budget = { mensuel: config.ECHANGES_BUDGET_MOIS, utilise: Number(pointsMois) * config.FCFA_PAR_POINT };
     const parCategorie = await query("SELECT categorie, COUNT(*) AS n FROM etablissements WHERE statut = 'valide' GROUP BY categorie ORDER BY n DESC");
     const contributeurs = await query("SELECT nom, points FROM users WHERE points > 0 ORDER BY points DESC LIMIT 5");
-    res.json({ ...chiffres, par_categorie: parCategorie, contributeurs });
+    res.json({ ...chiffres, budget, par_categorie: parCategorie, contributeurs });
 }));
 
 /* ---------- Contributions ---------- */

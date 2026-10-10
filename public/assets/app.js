@@ -824,13 +824,14 @@
     }
 
     /** Carte des points : niveau, équivalent en crédit, recharges possibles */
-    function htmlCredit(u, palier) {
+    function htmlCredit(u, palier, budget) {
         const { actuel, suivant } = palier;
         const base = actuel?.seuil || 0;
         const progression = suivant ? Math.round(((u.points - base) / (suivant.seuil - base)) * 100) : 100;
         const offres = etat.meta.echanges;
         const minimum = Math.min(...offres.map(o => o.points));
         const sigles = { orange: 'OG', mtn: 'MTN', moov: 'MA', internet: '10Go' };
+        const epuise = budget?.restant !== null && budget?.restant !== undefined && budget.restant < minimum * 5;
         return `<section class="credit">
             <div class="credit-haut">
                 <span class="credit-etiquette">${ic('verified_user', 'fill')}COMPTE CITOYEN ENGAGÉ</span>
@@ -849,7 +850,8 @@
                     <span class="operateur ${o.code}">${sigles[o.code] || ''}</span>
                     <span><b>${esc(o.libelle)}</b><small>${esc(o.detail)} (${o.points} pts)</small></span>
                 </button>`).join('')}</div>
-            <button type="button" class="btn btn-vert grand" data-action="echanger"${u.points < minimum ? ' disabled' : ''}>${ic('swap_horiz')}Échanger mes ${u.points} points en crédit</button>
+            <button type="button" class="btn btn-vert grand" data-action="echanger"${u.points < minimum || epuise ? ' disabled' : ''}>${ic('swap_horiz')}Échanger mes ${u.points} points en crédit</button>
+            ${epuise ? '<p class="erreur">Le budget de récompenses de ce mois est épuisé : revenez le mois prochain, vos points sont conservés.</p>' : ''}
             <p class="note">1 point = ${esc(fcfa(5))} de crédit. L'équipe effectue la recharge sous 48 h ; les barèmes peuvent évoluer.</p>
         </section>`;
     }
@@ -916,7 +918,7 @@
                 <div><b>${esc(u.nom)}</b><small>${esc(roles[u.role])}${u.telephone ? ` • ${esc(u.telephone)}` : ''}</small></div>
             </div>
 
-            ${htmlCredit(u, t.palier)}
+            ${htmlCredit(u, t.palier, t.budget)}
             <div class="points sans-bordure">
                 <ul class="regles">
                     <li><b>+${etat.meta.points.CONTRIBUTION}</b> par établissement ajouté et validé</li>
@@ -1134,7 +1136,7 @@
         api('/moi/tableau').then(t => {
             session.majUser(t.user);
             const zone = vueEl.querySelector('#zone-credit');
-            if (zone) zone.innerHTML = htmlCredit(t.user, t.palier);
+            if (zone) zone.innerHTML = htmlCredit(t.user, t.palier, t.budget);
         }).catch(() => { /* le formulaire reste utilisable sans la carte des points */ });
 
         const form = vueEl.querySelector('#form-ajout');

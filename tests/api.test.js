@@ -9,6 +9,7 @@ process.env.DB_NAME = process.env.DB_NAME || 'santemap_tests';
 process.env.ADMIN_PASSWORD = 'admin-test-123';
 process.env.IMPORT_OSM = 'false';
 process.env.SEED_DEMO = 'true';
+process.env.LIMITE_ECHANGES_HEURE = '1000';
 
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -19,7 +20,7 @@ if (!/test/i.test(config.DB_NAME)) {
 }
 
 const { initDB, initTables, supprimerTables, closePool, query } = require('../db/mysql');
-const { seedAdmin, seedDemo } = require('../db/seed');
+const { seedAdmin, seedDemo, creerUtilisateur } = require('../db/seed');
 const { createApp } = require('../server');
 const { maintenantLocal } = require('../lib/util');
 
@@ -457,4 +458,49 @@ test('e-mails : copie des notifications aux comptes qui ont une adresse, sans ja
     await new Promise(r => setTimeout(r, 150));
     assert.equal((await api('GET', '/api/moi/notifications', { token: avecEmail.token })).body.length, 3);
     utiliserTransport(undefined);
+});
+
+// Les inscriptions sont limitées par adresse IP : ce test crée ses comptes directement en base
+async function membreAvecPoints(nom, telephone, points) {
+    const id = await creerUtilisateur({ nom, email: `${telephone}@test.ci`, telephone, motDePasse: 'motdepasse1' });
+    await query('UPDATE users SET points = ? WHERE id = ?', [points, id]);
+    return { user: { id }, token: require('jsonwebtoken').sign({ id }, config.JWT_SECRET, { expiresIn: '1h' }) };
+}
+
+test('budget mensuel de récompenses : les échanges sont bloqués une fois le budget atteint', async () => {
+    const membre = await membreAvecPoints('Fatou Cissé', '0404040404', 1000);
+    const avant = (await api('GET', '/api/moi/tableau', { token: membre.token })).body.budget;
+    assert.ok(avant.utilise >= 0);
+
+    const initial = config.ECHANGES_BUDGET_MOIS;
+    try {
+        // Il reste 1 500 FCFA : une recharge de 1 000 passe, la suivante non
+        config.ECHANGES_BUDGET_MOIS = avant.utilise + 1500;
+        const premier = await api('POST', '/api/moi/echanges', { token: membre.token, body: { offre: 'orange', telephone: '0404040404' } });
+        assert.equal(premier.status, 201);
+
+        const suivant = await api('POST', '/api/moi/echanges', { token: membre.token, body: { offre: 'orange', telephone: '0404040404' } });
+        assert.equal(suivant.status, 409);
+        assert.equal(suivant.body.code, 'BUDGET_EPUISE');
+        const tableau = (await api('GET', '/api/moi/tableau', { token: membre.token })).body;
+        assert.equal(tableau.user.points, 800, 'aucun point débité pour l\'échange bloqué');
+        assert.equal(tableau.budget.restant, 500);
+
+        // Les demandes simultanées ne dépassent pas le budget
+        config.ECHANGES_BUDGET_MOIS = tableau.budget.utilise + 1000;
+        const collegue = await membreAvecPoints('Ama Kofi', '0303030303', 1000);
+        const [a, b] = await Promise.all([
+            api('POST', '/api/moi/echanges', { token: membre.token, body: { offre: 'orange', telephone: '0404040404' } }),
+            api('POST', '/api/moi/echanges', { token: collegue.token, body: { offre: 'orange', telephone: '0303030303' } })
+        ]);
+        assert.deepEqual([a.status, b.status].sort(), [201, 409]);
+
+        // Budget à 0 : aucune limite
+        config.ECHANGES_BUDGET_MOIS = 0;
+        assert.equal((await api('GET', '/api/moi/tableau', { token: membre.token })).body.budget.restant, null);
+        const admin_stats = (await api('GET', '/api/admin/stats', { token: admin })).body;
+        assert.ok(admin_stats.budget.utilise >= 3000);
+    } finally {
+        config.ECHANGES_BUDGET_MOIS = initial;
+    }
 });

@@ -41,6 +41,7 @@ router.get('/tableau', route(async (req, res) => {
         historique,
         contributions,
         echanges,
+        budget: await budgetDuMois(query),
         rendez_vous: rendezVous,
         notifications_non_lues: nonLues,
         filleuls
@@ -88,6 +89,24 @@ router.post('/contributions', limiteur({ fenetreMs: 60 * 60 * 1000, max: 30 }), 
 }));
 
 const CANAUX = ['whatsapp', 'sms', 'appel'];
+
+/** Récompenses déjà engagées ce mois-ci (échanges non refusés), en FCFA, et ce qu'il reste du budget */
+async function budgetDuMois(lire) {
+    const [{ points }] = await lire(
+        "SELECT COALESCE(SUM(points), 0) AS points FROM echanges WHERE statut <> 'refuse' AND created_at >= DATE_FORMAT(UTC_TIMESTAMP(), '%Y-%m-01')"
+    );
+    const utilise = Number(points) * config.FCFA_PAR_POINT;
+    const mensuel = config.ECHANGES_BUDGET_MOIS;
+    return { mensuel, utilise, restant: mensuel > 0 ? Math.max(0, mensuel - utilise) : null };
+}
+
+// Les échanges passent un par un : le budget du mois ne peut pas être dépassé par deux demandes simultanées
+let fileEchanges = Promise.resolve();
+const enFile = tache => {
+    const suite = fileEchanges.then(tache, tache);
+    fileEchanges = suite.catch(() => {});
+    return suite;
+};
 
 /**
  * Demande de rendez-vous. Deux formes :
@@ -162,13 +181,13 @@ router.post('/rendez-vous/:id/annuler', route(async (req, res) => {
 }));
 
 /** Échange de points contre du crédit ou un forfait : les points sont débités tout de suite, l'équipe effectue la recharge */
-router.post('/echanges', limiteur({ fenetreMs: 60 * 60 * 1000, max: 10 }), route(async (req, res) => {
+router.post('/echanges', limiteur({ fenetreMs: 60 * 60 * 1000, max: config.LIMITE_ECHANGES_HEURE }), route(async (req, res) => {
     const offre = config.ECHANGES.find(o => o.code === req.body.offre);
     const telephone = normaliserTelephone(req.body.telephone);
     if (!offre) throw new ApiError(400, 'Choisissez une offre');
     if (!telephone || telephone.length < 8) throw new ApiError(400, 'Indiquez le numéro à recharger');
 
-    const resultat = await transaction(async db => {
+    const resultat = await enFile(() => transaction(async db => {
         const [[user]] = await db.query('SELECT id, points FROM users WHERE id = ? FOR UPDATE', [req.user.id]);
         if (user.points < offre.points) throw new ApiError(400, `Il vous manque ${offre.points - user.points} points pour cette offre`);
         const [[{ recents }]] = await db.query(
@@ -178,12 +197,16 @@ router.post('/echanges', limiteur({ fenetreMs: 60 * 60 * 1000, max: 10 }), route
         if (recents >= config.ECHANGES_MAX_PAR_MOIS) {
             throw new ApiError(429, `Vous pouvez faire ${config.ECHANGES_MAX_PAR_MOIS} échanges par mois : réessayez plus tard`);
         }
+        const budget = await budgetDuMois(async (sql, p) => (await db.query(sql, p))[0]);
+        if (budget.restant !== null && offre.points * config.FCFA_PAR_POINT > budget.restant) {
+            throw new ApiError(409, 'Le budget de récompenses de ce mois est épuisé : revenez le mois prochain, vos points sont conservés.', 'BUDGET_EPUISE');
+        }
         const libelle = `${offre.libelle} — ${offre.detail}`;
         await db.query('INSERT INTO echanges (user_id, offre, libelle, points, telephone) VALUES (?, ?, ?, ?, ?)', [user.id, offre.code, libelle, offre.points, telephone]);
         await crediterPoints(db, user.id, -offre.points, `Échange : ${libelle}`);
         await notifier(db, user.id, 'Échange demandé', `${libelle} pour le ${telephone}. L'équipe effectue la recharge sous 48 h.`);
         return { points: user.points - offre.points };
-    });
+    }));
     res.status(201).json({ message: 'Échange demandé : vous serez prévenu(e) quand la recharge est faite.', ...resultat });
 }));
 

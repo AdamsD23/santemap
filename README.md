@@ -27,7 +27,7 @@ Pays de départ : **Côte d'Ivoire**. Le modèle est prévu pour être repris da
   - +50 avec la photo de la devanture ou de la plaque ;
   - +50 au parrain quand son filleul fait sa première contribution.
 - Niveaux : Éclaireur, Relais (150 points), Veilleur (300), Sentinelle (600).
-- Échange des points contre du crédit (Orange, MTN, Moov) ou un forfait Internet : 1 point = 5 FCFA, 3 échanges par mois au plus. Les points sont débités tout de suite ; l'équipe fait la recharge (ou refuse, et les points sont rendus).
+- Échange des points contre du crédit (Orange, MTN, Moov) ou un forfait Internet : 1 point = 5 FCFA, 3 échanges par mois et par membre au plus, et un budget total par mois (`ECHANGES_BUDGET_MOIS`, 100 000 FCFA par défaut, 0 = sans limite) : une fois atteint, les échanges sont bloqués jusqu'au mois suivant. Les points sont débités tout de suite ; l'équipe fait la recharge (ou refuse, et les points sont rendus).
 - Signalement d'une erreur sur une fiche (établissement fermé, mauvaise position…).
 
 **Offre payante pour les établissements**

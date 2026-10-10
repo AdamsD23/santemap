@@ -70,8 +70,15 @@ module.exports = {
         { code: 'moov', libelle: 'Moov Africa', detail: '2 000 FCFA de crédit', points: 400 },
         { code: 'internet', libelle: 'Pass 10 Go', detail: 'Forfait Internet', points: 450 }
     ],
+    // Demandes d'échange par heure et par adresse IP (anti-abus)
+    LIMITE_ECHANGES_HEURE: Number(process.env.LIMITE_ECHANGES_HEURE || 10),
+    // Valeur d'un point en FCFA de crédit
+    FCFA_PAR_POINT: 5,
     // Plafond d'échanges par membre sur 30 jours (anti-fraude)
     ECHANGES_MAX_PAR_MOIS: 3,
+    // Budget total de récompenses par mois civil, en FCFA, pour tous les membres (0 = sans limite).
+    // Une fois atteint, les échanges sont bloqués jusqu'au mois suivant.
+    ECHANGES_BUDGET_MOIS: Number(process.env.ECHANGES_BUDGET_MOIS ?? 100000),
 
     RAYON_MAX_KM: 50,
     RESULTATS_MAX: 300,
