@@ -8,7 +8,8 @@ const { query } = require('../db/mysql');
 const { PAYS } = require('../lib/pays');
 const { CATEGORIES, CODES } = require('../lib/categories');
 const { authentifierSiPossible } = require('../middleware/auth');
-const { creneauxDuJour, prochainsCreneaux } = require('../lib/creneaux');
+const { creneauxDuJour, prochainsCreneaux, prochainsJours, PLAGES } = require('../lib/creneaux');
+const { similarite, SEUIL } = require('../lib/doublons');
 const { ApiError, route, texte, nombre, maintenantLocal, ajouterJours, boiteAutour, lireJson, limiteur } = require('../lib/util');
 
 const router = express.Router();
@@ -52,16 +53,24 @@ async function creneauxPris(etablissementId, du, au) {
     return new Set(lignes.map(l => String(l.debut).slice(0, 16)));
 }
 
-router.get('/meta', (req, res) => {
+router.get('/meta', route(async (req, res) => {
     const p = pays();
+    const [stats] = await query(
+        `SELECT (SELECT COUNT(*) FROM etablissements WHERE pays = ? AND statut = 'valide') AS etablissements,
+                (SELECT COUNT(DISTINCT contributeur_id) FROM etablissements WHERE pays = ? AND statut = 'valide' AND contributeur_id IS NOT NULL) AS contributeurs`,
+        [p.code, p.code]
+    );
     res.json({
-        pays: { code: p.code, nom: p.nom, ville: p.ville, centre: p.centre, zoom: p.zoom, urgences: p.urgences },
+        stats,
+        echanges: config.ECHANGES,
+        plages: PLAGES,
+        pays: { code: p.code, nom: p.nom, ville: p.ville, centre: p.centre, zoom: p.zoom, urgences: p.urgences, communes: p.communes },
         categories: CATEGORIES,
         points: config.POINTS,
         paliers: config.PALIERS,
         demo: config.SEED_DEMO
     });
-});
+}));
 
 router.get('/etablissements', route(async (req, res) => {
     const p = pays();
@@ -140,7 +149,14 @@ router.get('/etablissements/:id', authentifierSiPossible, route(async (req, res)
     res.json({
         ...formatListe(e),
         site_web: e.site_web,
+        quartier: e.quartier,
+        agrement: e.agrement,
+        revendique: !!e.revendique,
+        mis_a_jour: e.updated_at,
         horaires: e.horaires,
+        horaires_detail: lireJson(e.horaires_detail, []),
+        assurances: e.premium ? e.assurances : null,
+        tarifs: e.premium ? lireJson(e.tarifs, []) : [],
         description: e.description,
         statut: e.statut,
         motif_refus: estAuteur || req.user?.role === 'admin' ? e.motif_refus : undefined,
@@ -167,6 +183,43 @@ router.get('/etablissements/:id/creneaux', route(async (req, res) => {
 
     const pris = await creneauxPris(e.id, date, ajouterJours(date, 1));
     res.json({ date, creneaux: creneauxDuJour(e, date, pris, maintenant, config.RDV_DELAI_MIN) });
+}));
+
+/** Jours et plages où l'établissement reçoit des demandes de rendez-vous */
+router.get('/etablissements/:id/disponibilites', route(async (req, res) => {
+    const maintenant = maintenantLocal(pays().fuseau);
+    const [e] = await query("SELECT id, rdv_actif, rdv_horaires FROM etablissements WHERE id = ? AND statut = 'valide'", [Number(req.params.id) || 0]);
+    if (!e || !e.rdv_actif) throw new ApiError(404, 'Cet établissement ne propose pas de rendez-vous en ligne');
+    res.json({ jours: prochainsJours(e, maintenant, config.RDV_DELAI_MIN, config.RDV_JOURS, 3) });
+}));
+
+/**
+ * Établissements déjà connus qui ressemblent à celui qu'on s'apprête à ajouter :
+ * même numéro de téléphone, ou nom proche à moins de 600 m.
+ */
+router.get('/doublons', route(async (req, res) => {
+    const nom = texte(req.query.nom, 200);
+    const categorie = CODES.includes(req.query.categorie) ? req.query.categorie : null;
+    const lat = nombre(req.query.lat, { min: -90, max: 90 });
+    const lng = nombre(req.query.lng, { min: -180, max: 180 });
+    if (!nom || nom.length < 3 || lat === null || lng === null) return res.json({ doublons: [] });
+
+    const b = boiteAutour(lat, lng, 0.6);
+    const lignes = await query(
+        `SELECT e.id, e.nom, e.categorie, e.commune, e.telephone, ${DISTANCE} AS distance FROM etablissements e
+         WHERE e.pays = ? AND e.statut = 'valide' AND e.lat BETWEEN ? AND ? AND e.lng BETWEEN ? AND ? ${categorie ? 'AND e.categorie = ?' : ''}
+         HAVING distance <= 0.6 ORDER BY distance LIMIT 200`,
+        [lat, lng, lat, pays().code, b.latMin, b.latMax, b.lngMin, b.lngMax, ...(categorie ? [categorie] : [])]
+    );
+    const chiffres = v => String(v || '').replace(/\D/g, '').slice(-8);
+    const telephone = chiffres(req.query.telephone);
+    const doublons = lignes
+        .map(e => ({ ...e, score: similarite(nom, e.nom), meme_telephone: telephone.length === 8 && chiffres(e.telephone) === telephone }))
+        .filter(e => e.score >= SEUIL || e.meme_telephone)
+        .sort((x, y) => y.score - x.score)
+        .slice(0, 3)
+        .map(e => ({ id: e.id, nom: e.nom, categorie: e.categorie, commune: e.commune, distance: Math.round(e.distance * 1000), meme_telephone: e.meme_telephone }));
+    res.json({ doublons });
 }));
 
 router.get('/photos/:id', route(async (req, res) => {

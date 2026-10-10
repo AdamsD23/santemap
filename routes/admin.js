@@ -7,16 +7,19 @@ const config = require('../config');
 const { query, transaction } = require('../db/mysql');
 const { CODES } = require('../lib/categories');
 const { validerHoraires } = require('../lib/creneaux');
-const { notifier, validerContribution } = require('../lib/services');
+const { notifier, crediterPoints, validerContribution } = require('../lib/services');
 const { ApiError, route, texte, nombre, lireJson } = require('../lib/util');
+const { champsFiche } = require('../lib/fiche');
 
 const router = express.Router();
 const id = req => Number(req.params.id) || 0;
 
-const LIBELLES_RDV = { confirme: 'confirmé', annule: 'annulé', termine: 'terminé' };
+const LIBELLES_RDV = { confirme: 'confirmé', refuse: 'refusé', annule: 'annulé', termine: 'terminé', absent: 'marqué absent' };
+// Transitions permises : une demande est confirmée ou refusée ; seul un rendez-vous confirmé est terminé ou marqué absent
+const TRANSITIONS = { en_attente: ['confirme', 'refuse', 'annule'], confirme: ['termine', 'absent', 'annule'] };
 
 /** Change le statut d'un rendez-vous et prévient le patient (utilisé aussi par l'espace établissement) */
-async function changerStatutRdv(rdvId, statut, etablissementId = null) {
+async function changerStatutRdv(rdvId, statut, etablissementId = null, message = null) {
     if (!LIBELLES_RDV[statut]) throw new ApiError(400, 'Statut invalide');
     const [rdv] = await query(
         `SELECT r.*, e.nom AS etablissement FROM rendez_vous r JOIN etablissements e ON e.id = r.etablissement_id
@@ -24,13 +27,14 @@ async function changerStatutRdv(rdvId, statut, etablissementId = null) {
         etablissementId ? [rdvId, etablissementId] : [rdvId]
     );
     if (!rdv) throw new ApiError(404, 'Rendez-vous introuvable');
-    if (['annule', 'termine'].includes(rdv.statut)) throw new ApiError(400, 'Ce rendez-vous est déjà clôturé');
+    if (!(TRANSITIONS[rdv.statut] || []).includes(statut)) throw new ApiError(400, 'Ce changement de statut n\'est pas possible pour ce rendez-vous');
 
-    await query('UPDATE rendez_vous SET statut = ?, annule_par = ? WHERE id = ?', [statut, statut === 'annule' ? 'etablissement' : null, rdv.id]);
+    await query('UPDATE rendez_vous SET statut = ?, annule_par = ?, message = ? WHERE id = ?',
+        [statut, statut === 'annule' ? 'etablissement' : null, texte(message, 255), rdv.id]);
     const quand = `${String(rdv.debut).slice(0, 10).split('-').reverse().join('/')} à ${String(rdv.debut).slice(11, 16)}`;
-    if (statut !== 'termine') {
+    if (!['termine', 'absent'].includes(statut)) {
         await notifier({ query }, rdv.user_id, `Rendez-vous ${LIBELLES_RDV[statut]}`,
-            `${rdv.etablissement} — ${quand} (réf. ${rdv.reference}).`);
+            `${rdv.etablissement} — ${quand} (réf. ${rdv.reference}).${message ? ` ${texte(message, 255)}` : ''}`);
     }
     return { id: rdv.id, statut };
 }
@@ -42,7 +46,9 @@ router.get('/stats', route(async (req, res) => {
         (SELECT COUNT(*) FROM rendez_vous WHERE statut = 'en_attente') AS rendez_vous,
         (SELECT COUNT(*) FROM signalements WHERE statut = 'nouveau') AS signalements,
         (SELECT COUNT(*) FROM users WHERE role = 'utilisateur') AS utilisateurs,
-        (SELECT COUNT(*) FROM etablissements WHERE premium = TRUE) AS partenaires`);
+        (SELECT COUNT(*) FROM etablissements WHERE premium = TRUE) AS partenaires,
+        (SELECT COUNT(*) FROM revendications WHERE statut = 'en_attente') AS revendications,
+        (SELECT COUNT(*) FROM echanges WHERE statut = 'demande') AS echanges`);
     const parCategorie = await query("SELECT categorie, COUNT(*) AS n FROM etablissements WHERE statut = 'valide' GROUP BY categorie ORDER BY n DESC");
     const contributeurs = await query("SELECT nom, points FROM users WHERE points > 0 ORDER BY points DESC LIMIT 5");
     res.json({ ...chiffres, par_categorie: parCategorie, contributeurs });
@@ -53,7 +59,7 @@ router.get('/stats', route(async (req, res) => {
 router.get('/contributions', route(async (req, res) => {
     const statut = ['en_attente', 'refuse', 'valide'].includes(req.query.statut) ? req.query.statut : 'en_attente';
     const lignes = await query(
-        `SELECT e.id, e.nom, e.categorie, e.lat, e.lng, e.adresse, e.commune, e.telephone, e.horaires, e.statut, e.motif_refus, e.created_at,
+        `SELECT e.id, e.nom, e.categorie, e.lat, e.lng, e.adresse, e.commune, e.quartier, e.garde_declaree, e.telephone, e.horaires, e.statut, e.motif_refus, e.created_at,
                 u.nom AS contributeur, u.telephone AS contributeur_telephone,
                 (SELECT MIN(p.id) FROM photos p WHERE p.etablissement_id = e.id) AS photo_id
          FROM etablissements e LEFT JOIN users u ON u.id = e.contributeur_id
@@ -138,11 +144,11 @@ router.get('/etablissements/:id', route(async (req, res) => {
     if (!e) throw new ApiError(404, 'Établissement introuvable');
     const gardes = await query('SELECT id, debut, fin FROM gardes WHERE etablissement_id = ? AND fin >= UTC_DATE() ORDER BY debut', [e.id]);
     const comptes = await query("SELECT id, nom, email, telephone FROM users WHERE etablissement_id = ? AND role = 'etablissement'", [e.id]);
-    res.json({ ...e, services: lireJson(e.services, []), rdv_horaires: lireJson(e.rdv_horaires, {}), gardes, comptes });
+    res.json({ ...e, services: lireJson(e.services, []), rdv_horaires: lireJson(e.rdv_horaires, {}), horaires_detail: lireJson(e.horaires_detail, []), tarifs: lireJson(e.tarifs, []), gardes, comptes });
 }));
 
-const BOOLEENS = ['ouvert_24h', 'urgences', 'verifie', 'premium', 'rdv_actif'];
-const TEXTES = { adresse: 255, commune: 100, telephone: 60, site_web: 255, horaires: 255, description: 2000 };
+const BOOLEENS = ['ouvert_24h', 'urgences', 'verifie', 'premium', 'rdv_actif', 'revendique'];
+const TEXTES = { adresse: 255, commune: 100, quartier: 100, telephone: 60, site_web: 255, horaires: 255, description: 2000, agrement: 255, assurances: 255 };
 
 router.patch('/etablissements/:id', route(async (req, res) => {
     const [e] = await query('SELECT * FROM etablissements WHERE id = ?', [id(req)]);
@@ -170,6 +176,7 @@ router.patch('/etablissements/:id', route(async (req, res) => {
         if (!Array.isArray(b.services) || b.services.length > 30) throw new ApiError(400, 'Liste de services invalide');
         champs.services = JSON.stringify(b.services.map(s => texte(s, 80)).filter(Boolean));
     }
+    Object.assign(champs, champsFiche(b));
     if ('prix_consultation' in b) {
         if (b.prix_consultation === null || b.prix_consultation === '') {
             champs.prix_consultation = null;
@@ -224,9 +231,9 @@ router.delete('/gardes/:id', route(async (req, res) => {
 /* ---------- Rendez-vous ---------- */
 
 router.get('/rendez-vous', route(async (req, res) => {
-    const statut = ['en_attente', 'confirme', 'annule', 'termine'].includes(req.query.statut) ? req.query.statut : null;
+    const statut = ['en_attente', 'confirme', 'refuse', 'annule', 'termine', 'absent'].includes(req.query.statut) ? req.query.statut : null;
     const lignes = await query(
-        `SELECT r.id, r.reference, r.debut, r.motif, r.telephone, r.statut, r.created_at, e.nom AS etablissement, u.nom AS patient
+        `SELECT r.id, r.reference, r.debut, r.plage, r.canal, r.motif, r.telephone, r.statut, r.created_at, e.nom AS etablissement, u.nom AS patient
          FROM rendez_vous r JOIN etablissements e ON e.id = r.etablissement_id JOIN users u ON u.id = r.user_id
          ${statut ? 'WHERE r.statut = ?' : ''} ORDER BY r.debut DESC LIMIT 100`,
         statut ? [statut] : []
@@ -235,7 +242,7 @@ router.get('/rendez-vous', route(async (req, res) => {
 }));
 
 router.patch('/rendez-vous/:id', route(async (req, res) => {
-    res.json(await changerStatutRdv(id(req), req.body.statut));
+    res.json(await changerStatutRdv(id(req), req.body.statut, null, req.body.message));
 }));
 
 /* ---------- Signalements ---------- */
@@ -253,6 +260,86 @@ router.post('/signalements/:id/traite', route(async (req, res) => {
     const r = await query("UPDATE signalements SET statut = 'traite' WHERE id = ?", [id(req)]);
     if (!r.affectedRows) throw new ApiError(404, 'Signalement introuvable');
     res.json({ message: 'Signalement traité' });
+}));
+
+/* ---------- Revendications de fiches ---------- */
+
+router.get('/revendications', route(async (req, res) => {
+    const lignes = await query(
+        `SELECT r.id, r.nom, r.fonction, r.telephone, r.justificatif, r.created_at, (r.piece_data IS NOT NULL) AS piece,
+                e.id AS etablissement_id, e.nom AS etablissement, e.categorie, e.commune, u.nom AS compte, u.role
+         FROM revendications r JOIN etablissements e ON e.id = r.etablissement_id JOIN users u ON u.id = r.user_id
+         WHERE r.statut = 'en_attente' ORDER BY r.id LIMIT 100`
+    );
+    res.json(lignes.map(l => ({ ...l, piece: !!l.piece })));
+}));
+
+router.get('/revendications/:id/piece', route(async (req, res) => {
+    const [r] = await query('SELECT piece_data, piece_mime FROM revendications WHERE id = ? AND piece_data IS NOT NULL', [id(req)]);
+    if (!r) throw new ApiError(404, 'Pièce introuvable');
+    res.setHeader('Content-Type', r.piece_mime);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(r.piece_data);
+}));
+
+router.post('/revendications/:id/approuver', route(async (req, res) => {
+    await transaction(async db => {
+        const [[r]] = await db.query("SELECT * FROM revendications WHERE id = ? AND statut = 'en_attente' FOR UPDATE", [id(req)]);
+        if (!r) throw new ApiError(404, 'Demande introuvable ou déjà traitée');
+        const [[user]] = await db.query('SELECT id, role, etablissement_id FROM users WHERE id = ?', [r.user_id]);
+        if (user.role === 'admin') throw new ApiError(400, 'Un compte de l\'équipe ne peut pas gérer une fiche');
+        if (user.etablissement_id && user.etablissement_id !== r.etablissement_id) {
+            throw new ApiError(409, 'Ce compte gère déjà un autre établissement');
+        }
+        const [[e]] = await db.query('SELECT id, nom, revendique FROM etablissements WHERE id = ? FOR UPDATE', [r.etablissement_id]);
+        if (e.revendique) throw new ApiError(409, 'Cette fiche est déjà gérée par un autre compte');
+        await db.query("UPDATE users SET role = 'etablissement', etablissement_id = ? WHERE id = ?", [e.id, user.id]);
+        await db.query('UPDATE etablissements SET revendique = TRUE WHERE id = ?', [e.id]);
+        await db.query("UPDATE revendications SET statut = 'approuvee', piece_data = NULL WHERE id = ?", [r.id]);
+        await db.query("UPDATE revendications SET statut = 'refusee', motif = 'Fiche attribuée à un autre demandeur' WHERE etablissement_id = ? AND statut = 'en_attente'", [e.id]);
+        await notifier(db, user.id, 'Fiche attribuée', `Vous gérez maintenant « ${e.nom} » : mettez à jour les informations et répondez aux demandes de rendez-vous depuis votre compte.`);
+    });
+    res.json({ message: 'Fiche attribuée au professionnel' });
+}));
+
+router.post('/revendications/:id/refuser', route(async (req, res) => {
+    const motif = texte(req.body.motif, 255);
+    if (!motif) throw new ApiError(400, 'Indiquez le motif du refus');
+    const [r] = await query(
+        "SELECT r.id, r.user_id, e.nom FROM revendications r JOIN etablissements e ON e.id = r.etablissement_id WHERE r.id = ? AND r.statut = 'en_attente'", [id(req)]
+    );
+    if (!r) throw new ApiError(404, 'Demande introuvable ou déjà traitée');
+    await query("UPDATE revendications SET statut = 'refusee', motif = ?, piece_data = NULL WHERE id = ?", [motif, r.id]);
+    await notifier({ query }, r.user_id, 'Demande de gestion refusée', `« ${r.nom} » : ${motif}`);
+    res.json({ message: 'Demande refusée' });
+}));
+
+/* ---------- Échanges de points ---------- */
+
+router.get('/echanges', route(async (req, res) => {
+    const lignes = await query(
+        `SELECT x.id, x.libelle, x.points, x.telephone, x.statut, x.created_at, u.nom AS membre
+         FROM echanges x JOIN users u ON u.id = x.user_id WHERE x.statut = 'demande' ORDER BY x.id LIMIT 100`
+    );
+    res.json(lignes);
+}));
+
+/** « effectue » une fois la recharge faite ; « refuse » rend les points au membre */
+router.post('/echanges/:id/traiter', route(async (req, res) => {
+    const statut = req.body.statut;
+    if (!['effectue', 'refuse'].includes(statut)) throw new ApiError(400, 'Statut invalide');
+    await transaction(async db => {
+        const [[x]] = await db.query("SELECT * FROM echanges WHERE id = ? AND statut = 'demande' FOR UPDATE", [id(req)]);
+        if (!x) throw new ApiError(404, 'Échange introuvable ou déjà traité');
+        await db.query('UPDATE echanges SET statut = ? WHERE id = ?', [statut, x.id]);
+        if (statut === 'refuse') {
+            await crediterPoints(db, x.user_id, x.points, `Échange annulé : ${x.libelle}`);
+            await notifier(db, x.user_id, 'Échange refusé', `${x.libelle} n'a pas pu être effectué : vos ${x.points} points vous sont rendus.`);
+        } else {
+            await notifier(db, x.user_id, 'Recharge effectuée', `${x.libelle} : la recharge du ${x.telephone} est faite.`);
+        }
+    });
+    res.json({ message: statut === 'effectue' ? 'Échange marqué comme effectué' : 'Échange refusé, points rendus' });
 }));
 
 /* ---------- Comptes ---------- */

@@ -2,7 +2,7 @@
 'use strict';
 
 (() => {
-    const { session, api, esc, ic, toast, dialogue, dateHeure, jourLisible, fcfa, STATUTS, dateLocale } = SM;
+    const { session, api, esc, ic, toast, dialogue, dateHeure, jourLisible, fcfa, STATUTS, STATUTS_RDV, PLAGES, dateLocale } = SM;
     const contenu = document.getElementById('contenu');
     const JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
     let categories = [];
@@ -65,6 +65,8 @@
                 <div class="stat ${s.contributions ? 'alerte' : ''}"><b>${s.contributions}</b><span>contributions à vérifier</span></div>
                 <div class="stat ${s.rendez_vous ? 'alerte' : ''}"><b>${s.rendez_vous}</b><span>rendez-vous en attente</span></div>
                 <div class="stat ${s.signalements ? 'alerte' : ''}"><b>${s.signalements}</b><span>signalements à traiter</span></div>
+                <div class="stat ${s.revendications ? 'alerte' : ''}"><b>${s.revendications}</b><span>fiches à revendiquer</span></div>
+                <div class="stat ${s.echanges ? 'alerte' : ''}"><b>${s.echanges}</b><span>échanges de points à traiter</span></div>
                 <div class="stat"><b>${s.utilisateurs}</b><span>membres inscrits</span></div>
                 <div class="stat"><b>${s.partenaires}</b><span>établissements partenaires</span></div>
             </div>
@@ -80,6 +82,8 @@
         document.getElementById('nb-contributions').textContent = s.contributions || '';
         document.getElementById('nb-rdv').textContent = s.rendez_vous || '';
         document.getElementById('nb-signalements').textContent = s.signalements || '';
+        document.getElementById('nb-revendications').textContent = s.revendications || '';
+        document.getElementById('nb-echanges').textContent = s.echanges || '';
     }
 
     /* ---------- Contributions ---------- */
@@ -109,7 +113,8 @@
                     <select class="input" name="categorie" aria-label="Type">${optionsCategories(c.categorie)}</select>` : `<b>${esc(c.nom)}</b><span class="badge">${esc(libelleCategorie(c.categorie))}</span>`}
                 <dl>
                     <dt>Contributeur</dt><dd>${esc(c.contributeur || '—')}${c.contributeur_telephone ? ` (${esc(c.contributeur_telephone)})` : ''}</dd>
-                    <dt>Commune</dt><dd>${esc(c.commune || '—')}</dd>
+                    <dt>Commune</dt><dd>${esc([c.quartier, c.commune].filter(Boolean).join(', ') || '—')}</dd>
+                    ${c.garde_declaree ? '<dt>Garde</dt><dd><b>Déclarée de garde cette semaine</b> (créée à la validation)</dd>' : ''}
                     <dt>Repère</dt><dd>${esc(c.adresse || '—')}</dd>
                     <dt>Téléphone</dt><dd>${esc(c.telephone || '—')}</dd>
                     <dt>Horaires</dt><dd>${esc(c.horaires || '—')}</dd>
@@ -199,6 +204,9 @@
         contenu.querySelectorAll('[data-editer]').forEach(b => b.addEventListener('click', () => editer(b.dataset.editer, () => etablissements(q, filtre))));
     }
 
+    /** Lignes « a | b | c » d'un champ de saisie, sans les lignes vides */
+    const lignes = texte => texte.split('\n').map(l => l.split('|').map(x => x.trim())).filter(l => l[0]);
+
     async function editer(id, apres) {
         let e;
         try {
@@ -215,6 +223,8 @@
                     <div class="champ"><label>Type</label><select class="input" name="categorie">${optionsCategories(e.categorie)}</select></div>
                     <div class="champ"><label>Téléphone</label><input class="input" name="telephone" value="${esc(e.telephone || '')}" maxlength="60"></div>
                     <div class="champ"><label>Commune</label><input class="input" name="commune" value="${esc(e.commune || '')}" maxlength="100"></div>
+                    <div class="champ"><label>Quartier</label><input class="input" name="quartier" value="${esc(e.quartier || '')}" maxlength="100"></div>
+                    <div class="champ"><label>Agrément / autorisation</label><input class="input" name="agrement" value="${esc(e.agrement || '')}" maxlength="255" placeholder="Ex. Agrément Ministère de la Santé n° …"></div>
                     <div class="champ"><label>Adresse / repère</label><input class="input" name="adresse" value="${esc(e.adresse || '')}" maxlength="255"></div>
                     <div class="champ"><label>Horaires (texte affiché)</label><input class="input" name="horaires" value="${esc(e.horaires || '')}" maxlength="255"></div>
                     <div class="champ"><label>Site web</label><input class="input" name="site_web" value="${esc(e.site_web || '')}" maxlength="255"></div>
@@ -224,6 +234,7 @@
                     <label><input type="checkbox" name="verifie" ${e.verifie ? 'checked' : ''}> Vérifié</label>
                     <label><input type="checkbox" name="ouvert_24h" ${e.ouvert_24h ? 'checked' : ''}> Ouvert 24h/24</label>
                     <label><input type="checkbox" name="urgences" ${e.urgences ? 'checked' : ''}> Service d'urgences</label>
+                    <label><input type="checkbox" name="revendique" ${e.revendique ? 'checked' : ''}> Fiche revendiquée (justificatifs contrôlés)</label>
                     <label><input type="checkbox" name="masque" ${e.statut !== 'valide' ? 'checked' : ''}> Masqué de la carte</label>
                 </div>
 
@@ -231,6 +242,9 @@
                 <label class="cases"><span><input type="checkbox" name="premium" ${e.premium ? 'checked' : ''}> Établissement partenaire (fiche détaillée)</span></label>
                 <div class="grille-champs">
                     <div class="champ large"><label>Services proposés <small>(un par ligne)</small></label><textarea class="input" name="services">${esc(e.services.join('\n'))}</textarea></div>
+                    <div class="champ large"><label>Horaires par service <small>(un par ligne : Service | horaires)</small></label><textarea class="input" name="horaires_detail">${esc(e.horaires_detail.map(h => `${h.libelle} | ${h.horaires}`).join('\n'))}</textarea></div>
+                    <div class="champ large"><label>Tarifs indicatifs <small>(un par ligne : Prestation | précision | prix en FCFA)</small></label><textarea class="input" name="tarifs">${esc(e.tarifs.map(t => `${t.libelle} | ${t.detail || ''} | ${t.prix}`).join('\n'))}</textarea></div>
+                    <div class="champ large"><label>Assurances et moyens de paiement acceptés</label><input class="input" name="assurances" value="${esc(e.assurances || '')}" maxlength="255"></div>
                     <div class="champ"><label>Consultation à partir de (FCFA)</label><input class="input" name="prix_consultation" type="number" min="0" step="500" value="${e.prix_consultation ?? ''}"></div>
                     <div class="champ"><label>Durée d'un rendez-vous (minutes)</label><input class="input" name="rdv_duree" type="number" min="10" max="120" step="5" value="${e.rdv_duree}"></div>
                 </div>
@@ -261,6 +275,9 @@
             const corps = {
                 nom: f.nom.value, categorie: f.categorie.value, telephone: f.telephone.value, commune: f.commune.value,
                 adresse: f.adresse.value, horaires: f.horaires.value, site_web: f.site_web.value, description: f.description.value,
+                quartier: f.quartier.value, agrement: f.agrement.value, assurances: f.assurances.value, revendique: f.revendique.checked,
+                horaires_detail: lignes(f.horaires_detail.value).map(([libelle, h]) => ({ libelle, horaires: h })),
+                tarifs: lignes(f.tarifs.value).map(([libelle, detail, prix]) => ({ libelle, detail, prix: Number(String(prix).replace(/\D/g, '')) })),
                 verifie: f.verifie.checked, ouvert_24h: f.ouvert_24h.checked, urgences: f.urgences.checked,
                 statut: f.masque.checked ? 'refuse' : 'valide',
                 premium: f.premium.checked, services: f.services.value.split('\n').map(s => s.trim()).filter(Boolean),
@@ -301,7 +318,7 @@
         contenu.innerHTML = `<h1>Rendez-vous</h1>
             <p class="note">Demandes faites depuis l'application. Les établissements partenaires peuvent aussi les gérer depuis leur compte.</p>
             <div class="barre"><select class="input" id="filtre-rdv">
-                <option value="en_attente">En attente</option><option value="confirme">Confirmés</option><option value="annule">Annulés</option><option value="termine">Terminés</option><option value="">Tous</option>
+                <option value="en_attente">Demandés</option><option value="confirme">Confirmés</option><option value="refuse">Refusés</option><option value="annule">Annulés</option><option value="termine">Terminés</option><option value="absent">Absences</option><option value="">Tous</option>
             </select></div>
             <div id="liste-rdv">${chargement()}</div>`;
         const filtre = contenu.querySelector('#filtre-rdv');
@@ -312,13 +329,15 @@
         contenu.querySelector('#liste-rdv').innerHTML = liste.length ? `<table class="tableau">
             <thead><tr><th>Date</th><th>Établissement</th><th>Patient</th><th>Motif</th><th>Statut</th><th></th></tr></thead>
             <tbody>${liste.map(r => `<tr>
-                <td>${esc(dateHeure(r.debut))}<br><small class="note">${esc(r.reference)}</small></td>
+                <td>${esc(r.plage ? `${jourLisible(String(r.debut).slice(0, 10))} • ${PLAGES[r.plage]}` : dateHeure(r.debut))}<br><small class="note">${esc(r.reference)}</small></td>
                 <td>${esc(r.etablissement)}</td>
                 <td>${esc(r.patient)}<br><a href="tel:${esc(r.telephone)}">${ic('call')}${esc(r.telephone)}</a></td>
                 <td>${esc(r.motif || '—')}</td>
-                <td><span class="statut ${r.statut}">${STATUTS[r.statut]}</span></td>
+                <td><span class="statut ${r.statut}">${esc(STATUTS_RDV[r.statut])}</span></td>
                 <td>${['en_attente', 'confirme'].includes(r.statut) ? `<div class="actions">
-                    ${r.statut === 'en_attente' ? `<button type="button" class="btn btn-primary btn-petit" data-rdv="${r.id}" data-statut="confirme">Confirmer</button>` : `<button type="button" class="btn btn-ligne btn-petit" data-rdv="${r.id}" data-statut="termine">Terminé</button>`}
+                    ${r.statut === 'en_attente'
+                        ? `<button type="button" class="btn btn-primary btn-petit" data-rdv="${r.id}" data-statut="confirme">Confirmer</button><button type="button" class="btn btn-ligne btn-petit" data-rdv="${r.id}" data-statut="refuse">Refuser</button>`
+                        : `<button type="button" class="btn btn-ligne btn-petit" data-rdv="${r.id}" data-statut="termine">Terminé</button><button type="button" class="btn btn-ligne btn-petit" data-rdv="${r.id}" data-statut="absent">Absent</button>`}
                     <button type="button" class="btn btn-ligne btn-petit" data-rdv="${r.id}" data-statut="annule">Annuler</button></div>` : ''}</td>
             </tr>`).join('')}</tbody></table>` : `<div class="vide">${ic('event')}Aucun rendez-vous.</div>`;
 
@@ -357,6 +376,88 @@
                 await api(`/admin/signalements/${b.dataset.traite}/traite`, { methode: 'POST' });
                 toast('Signalement traité');
                 signalements();
+                rafraichirCompteurs();
+            } catch (err) { toast(err.message, true); }
+        }));
+    }
+
+    /* ---------- Revendications de fiches ---------- */
+
+    async function revendications() {
+        contenu.innerHTML = `<h1>Revendications</h1>
+            <p class="note">Un professionnel demande à gérer la fiche de son établissement. Contrôlez ses justificatifs (numéro d'ordre, licence, agrément) avant d'accepter : le compte devient « établissement » et la fiche passe en « revendiquée ».</p>
+            <div id="liste-rev">${chargement()}</div>`;
+        const liste = await api('/admin/revendications');
+        contenu.querySelector('#liste-rev').innerHTML = liste.length ? `<div class="grille-cartes">${liste.map(r => `
+            <article class="contrib" data-id="${r.id}">
+                <b>${esc(r.etablissement)}</b><span class="badge">${esc(libelleCategorie(r.categorie))}${r.commune ? ` • ${esc(r.commune)}` : ''}</span>
+                <dl>
+                    <dt>Demandeur</dt><dd>${esc(r.nom)} (${esc(r.fonction)})</dd>
+                    <dt>Téléphone</dt><dd><a href="tel:${esc(r.telephone)}">${esc(r.telephone)}</a></dd>
+                    <dt>Justificatif</dt><dd>${esc(r.justificatif)}</dd>
+                    <dt>Compte</dt><dd>${esc(r.compte)}${r.role !== 'utilisateur' ? ` (${esc(r.role)})` : ''}</dd>
+                    <dt>Pièce</dt><dd>${r.piece ? `<button type="button" class="btn btn-ligne btn-petit" data-piece="${r.id}">Voir le document</button>` : 'Aucune photo jointe'}</dd>
+                    <dt>Fiche</dt><dd><button type="button" class="btn btn-ligne btn-petit" data-editer="${r.etablissement_id}">Ouvrir la fiche</button></dd>
+                </dl>
+                <div class="actions">
+                    <button type="button" class="btn btn-primary btn-petit" data-approuver="${r.id}">${ic('check')}Attribuer la fiche</button>
+                    <button type="button" class="btn btn-ligne btn-petit" data-refuser="${r.id}">${ic('close')}Refuser</button>
+                </div>
+            </article>`).join('')}</div>` : `<div class="vide">${ic('check')}Aucune demande en attente.</div>`;
+
+        contenu.querySelectorAll('[data-editer]').forEach(b => b.addEventListener('click', () => editer(b.dataset.editer)));
+        contenu.querySelectorAll('[data-piece]').forEach(b => b.addEventListener('click', async () => {
+            // Le justificatif n'est pas public : il se charge avec le jeton de l'équipe
+            try {
+                const res = await fetch(`/api/admin/revendications/${b.dataset.piece}/piece`, { headers: { Authorization: `Bearer ${session.jeton()}` } });
+                if (!res.ok) throw new Error('Document introuvable');
+                const url = URL.createObjectURL(await res.blob());
+                urlsPhotos.push(url);
+                dialogue(`<h3>Justificatif</h3><img src="${url}" alt="Justificatif du demandeur" style="width:100%;border-radius:12px">`);
+            } catch (err) { toast(err.message, true); }
+        }));
+        contenu.querySelectorAll('[data-approuver]').forEach(b => b.addEventListener('click', async () => {
+            if (!confirm('Attribuer la gestion de cette fiche à ce compte ?')) return;
+            try {
+                await api(`/admin/revendications/${b.dataset.approuver}/approuver`, { methode: 'POST' });
+                toast('Fiche attribuée');
+                revendications();
+                rafraichirCompteurs();
+            } catch (err) { toast(err.message, true); }
+        }));
+        contenu.querySelectorAll('[data-refuser]').forEach(b => b.addEventListener('click', async () => {
+            const motif = prompt('Motif du refus (envoyé au demandeur) :');
+            if (!motif) return;
+            try {
+                await api(`/admin/revendications/${b.dataset.refuser}/refuser`, { methode: 'POST', corps: { motif } });
+                toast('Demande refusée');
+                revendications();
+                rafraichirCompteurs();
+            } catch (err) { toast(err.message, true); }
+        }));
+    }
+
+    /* ---------- Échanges de points ---------- */
+
+    async function echanges() {
+        contenu.innerHTML = `<h1>Échanges de points</h1>
+            <p class="note">Les membres échangent leurs points contre du crédit ou un forfait. Faites la recharge, puis marquez l'échange « effectué » ; un refus rend les points au membre.</p>
+            <div id="liste-ech">${chargement()}</div>`;
+        const liste = await api('/admin/echanges');
+        contenu.querySelector('#liste-ech').innerHTML = liste.length ? `<table class="tableau">
+            <thead><tr><th>Membre</th><th>Offre</th><th>Numéro à recharger</th><th>Points</th><th>Demandé le</th><th></th></tr></thead>
+            <tbody>${liste.map(x => `<tr>
+                <td><b>${esc(x.membre)}</b></td><td>${esc(x.libelle)}</td><td><a href="tel:${esc(x.telephone)}">${esc(x.telephone)}</a></td><td>${x.points}</td><td>${esc(dateHeure(x.created_at))}</td>
+                <td><div class="actions">
+                    <button type="button" class="btn btn-primary btn-petit" data-echange="${x.id}" data-statut="effectue">Recharge faite</button>
+                    <button type="button" class="btn btn-ligne btn-petit" data-echange="${x.id}" data-statut="refuse">Refuser</button></div></td>
+            </tr>`).join('')}</tbody></table>` : `<div class="vide">${ic('check')}Aucun échange à traiter.</div>`;
+        contenu.querySelectorAll('[data-echange]').forEach(b => b.addEventListener('click', async () => {
+            if (b.dataset.statut === 'refuse' && !confirm('Refuser cet échange ? Les points seront rendus au membre.')) return;
+            try {
+                const res = await api(`/admin/echanges/${b.dataset.echange}/traiter`, { methode: 'POST', corps: { statut: b.dataset.statut } });
+                toast(res.message);
+                echanges();
                 rafraichirCompteurs();
             } catch (err) { toast(err.message, true); }
         }));
@@ -406,7 +507,7 @@
 
     /* ---------- Navigation ---------- */
 
-    const PAGES = { tableau, contributions, etablissements, 'rendez-vous': rendezVous, signalements, comptes };
+    const PAGES = { tableau, contributions, etablissements, 'rendez-vous': rendezVous, signalements, revendications, echanges, comptes };
 
     async function ouvrir(nom) {
         onglet = nom;

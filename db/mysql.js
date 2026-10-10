@@ -148,8 +148,13 @@ const TABLES = [
         debut DATETIME NOT NULL,
         motif VARCHAR(255) NULL,
         telephone VARCHAR(20) NOT NULL,
-        statut ENUM('en_attente','confirme','annule','termine') NOT NULL DEFAULT 'en_attente',
+        statut ENUM('en_attente','confirme','refuse','annule','termine','absent') NOT NULL DEFAULT 'en_attente',
         annule_par ENUM('patient','etablissement') NULL,
+        plage ENUM('matin','midi','apres_midi') NULL,
+        canal ENUM('whatsapp','sms','appel') NULL,
+        nom_patient VARCHAR(100) NULL,
+        service VARCHAR(100) NULL,
+        message VARCHAR(255) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_creneau (etablissement_id, debut),
         FOREIGN KEY (etablissement_id) REFERENCES etablissements(id) ON DELETE CASCADE,
@@ -190,17 +195,76 @@ const TABLES = [
         INDEX idx_statut (statut),
         FOREIGN KEY (etablissement_id) REFERENCES etablissements(id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+
+    // Échange de points contre du crédit téléphonique ou un forfait Internet
+    `CREATE TABLE IF NOT EXISTS echanges (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        offre VARCHAR(30) NOT NULL,
+        libelle VARCHAR(100) NOT NULL,
+        points INT NOT NULL,
+        telephone VARCHAR(20) NOT NULL,
+        statut ENUM('demande','effectue','refuse') NOT NULL DEFAULT 'demande',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_statut (statut),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+
+    // Demande d'un professionnel pour gérer la fiche de son établissement
+    `CREATE TABLE IF NOT EXISTS revendications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        etablissement_id INT NOT NULL,
+        user_id INT NOT NULL,
+        nom VARCHAR(100) NOT NULL,
+        fonction VARCHAR(100) NOT NULL,
+        telephone VARCHAR(20) NOT NULL,
+        justificatif VARCHAR(255) NOT NULL,
+        piece_data MEDIUMBLOB NULL,
+        piece_mime VARCHAR(30) NULL,
+        statut ENUM('en_attente','approuvee','refusee') NOT NULL DEFAULT 'en_attente',
+        motif VARCHAR(255) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_statut (statut),
+        FOREIGN KEY (etablissement_id) REFERENCES etablissements(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
+];
+
+// Colonnes ajoutées après la première version : appliquées aux bases déjà créées
+// (pas de « ADD COLUMN IF NOT EXISTS » : MySQL 8 ne le comprend pas, seul MariaDB le connaît)
+const COLONNES = [
+    ['etablissements', 'quartier', 'VARCHAR(100) NULL'],
+    ['etablissements', 'agrement', 'VARCHAR(255) NULL'],
+    ['etablissements', 'assurances', 'VARCHAR(255) NULL'],
+    ['etablissements', 'horaires_detail', 'TEXT NULL'],
+    ['etablissements', 'tarifs', 'TEXT NULL'],
+    ['etablissements', 'revendique', 'BOOLEAN NOT NULL DEFAULT FALSE'],
+    ['etablissements', 'garde_declaree', 'BOOLEAN NOT NULL DEFAULT FALSE'],
+    ['rendez_vous', 'plage', "ENUM('matin','midi','apres_midi') NULL"],
+    ['rendez_vous', 'canal', "ENUM('whatsapp','sms','appel') NULL"],
+    ['rendez_vous', 'nom_patient', 'VARCHAR(100) NULL'],
+    ['rendez_vous', 'service', 'VARCHAR(100) NULL'],
+    ['rendez_vous', 'message', 'VARCHAR(255) NULL']
 ];
 
 async function initTables() {
     for (const sql of TABLES) await query(sql);
+    for (const [table, colonne, definition] of COLONNES) {
+        const [existe] = await query(
+            'SELECT 1 AS ok FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+            [table, colonne]
+        );
+        if (!existe) await query(`ALTER TABLE ${table} ADD COLUMN ${colonne} ${definition}`);
+    }
+    // Statuts de rendez-vous ajoutés après la première version (refusé, absence constatée)
+    await query("ALTER TABLE rendez_vous MODIFY statut ENUM('en_attente','confirme','refuse','annule','termine','absent') NOT NULL DEFAULT 'en_attente'");
 }
 
 /** Supprime toutes les tables (utilisé uniquement par les tests) */
 async function supprimerTables() {
     await query('SET FOREIGN_KEY_CHECKS = 0');
-    for (const table of ['signalements', 'notifications', 'points_historique', 'rendez_vous', 'gardes', 'photos', 'users', 'etablissements']) {
+    for (const table of ['revendications', 'echanges', 'signalements', 'notifications', 'points_historique', 'rendez_vous', 'gardes', 'photos', 'users', 'etablissements']) {
         await query(`DROP TABLE IF EXISTS ${table}`);
     }
     await query('SET FOREIGN_KEY_CHECKS = 1');

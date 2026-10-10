@@ -109,6 +109,14 @@ const SM = (() => {
         return `${jourLisible(date)} à ${(heure || '').slice(0, 5)}`;
     }
 
+    /** Pour les boutons de jour : { titre: 'Demain', sous: '19 avr.' } */
+    function jourCourt(iso) {
+        const d = new Date(`${iso}T12:00:00`);
+        const aujourdhui = dateLocale();
+        const titre = iso === aujourdhui ? 'Aujourd\'hui' : iso === ajouterJours(aujourdhui, 1) ? 'Demain' : { 0: 'Dimanche', 1: 'Lundi', 2: 'Mardi', 3: 'Mercredi', 4: 'Jeudi', 5: 'Vendredi', 6: 'Samedi' }[d.getDay()];
+        return { titre, sous: `${d.getDate()} ${MOIS[d.getMonth()]}` };
+    }
+
     const initiales = nom => String(nom || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(m => m[0].toUpperCase()).join('');
     const fcfa = n => `${Number(n).toLocaleString('fr-FR').replace(/ | /g, ' ')} FCFA`;
 
@@ -126,8 +134,14 @@ const SM = (() => {
 
     const STATUTS = {
         en_attente: 'En attente', valide: 'Validée', refuse: 'Refusée',
-        confirme: 'Confirmé', annule: 'Annulé', termine: 'Terminé'
+        confirme: 'Confirmé', annule: 'Annulé', termine: 'Terminé', absent: 'Absence constatée'
     };
+    // Une demande de rendez-vous n'est jamais présentée comme une réservation tant que l'établissement n'a pas confirmé
+    const STATUTS_RDV = {
+        en_attente: 'Demandée, en attente de réponse', confirme: 'Confirmée', refuse: 'Refusée',
+        annule: 'Annulée', termine: 'Terminée', absent: 'Absence constatée'
+    };
+    const PLAGES = { matin: 'Matin', midi: 'Midi', apres_midi: 'Après-midi' };
 
-    return { session, api, esc, ic, toast, distance, haversine, dateLocale, ajouterJours, jourLisible, dateHeure, initiales, fcfa, dialogue, STATUTS };
+    return { session, api, esc, ic, toast, distance, haversine, dateLocale, ajouterJours, jourLisible, jourCourt, dateHeure, initiales, fcfa, dialogue, STATUTS, STATUTS_RDV, PLAGES };
 })();

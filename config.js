@@ -41,18 +41,30 @@ module.exports = {
 
     PAYS_DEFAUT: (process.env.PAYS_DEFAUT || 'CI').toUpperCase(),
 
-    // Points gagnés par les contributeurs
+    // Points gagnés par les contributeurs : 50 pour un établissement validé (nom 20 + position 30,
+    // détail affiché à l'écran), 50 de plus avec la photo de la devanture ou de la plaque
     POINTS: {
-        CONTRIBUTION: 10,
-        PHOTO: 5,
-        PARRAINAGE: 20
+        CONTRIBUTION: 50,
+        PHOTO: 50,
+        PARRAINAGE: 50
     },
-    // Paliers de récompense (les cadeaux sont définis par l'équipe)
+    // Niveaux des contributeurs
     PALIERS: [
-        { seuil: 50, nom: 'Bronze' },
-        { seuil: 150, nom: 'Argent' },
-        { seuil: 300, nom: 'Or' }
+        { seuil: 0, nom: 'Éclaireur', niveau: 1 },
+        { seuil: 150, nom: 'Relais', niveau: 2 },
+        { seuil: 300, nom: 'Veilleur', niveau: 3 },
+        { seuil: 600, nom: 'Sentinelle', niveau: 4 }
     ],
+    // Offres d'échange des points : 1 point vaut 5 FCFA de crédit. L'équipe effectue la recharge
+    // après la demande ; les montants et plafonds sont à confirmer avant le lancement public.
+    ECHANGES: [
+        { code: 'orange', libelle: 'Orange CI', detail: '1 000 FCFA de crédit', points: 200 },
+        { code: 'mtn', libelle: 'MTN CI', detail: '1 500 FCFA de crédit', points: 300 },
+        { code: 'moov', libelle: 'Moov Africa', detail: '2 000 FCFA de crédit', points: 400 },
+        { code: 'internet', libelle: 'Pass 10 Go', detail: 'Forfait Internet', points: 450 }
+    ],
+    // Plafond d'échanges par membre sur 30 jours (anti-fraude)
+    ECHANGES_MAX_PAR_MOIS: 3,
 
     RAYON_MAX_KM: 50,
     RESULTATS_MAX: 300,

@@ -56,15 +56,25 @@ async function seedDemo() {
     const centre = await query(
         `INSERT INTO etablissements
          (pays, categorie, nom, lat, lng, adresse, commune, telephone, horaires, description, source, verifie, premium,
-          services, prix_consultation, rdv_actif, rdv_duree, rdv_horaires, valide_le)
-         VALUES ('CI', 'clinique', ?, 5.3546, -3.9725, ?, 'Cocody', NULL, ?, ?, 'demo', TRUE, TRUE, ?, 15000, TRUE, 30, ?, UTC_TIMESTAMP())`,
+          services, prix_consultation, rdv_actif, rdv_duree, rdv_horaires, valide_le,
+          quartier, agrement, assurances, horaires_detail, tarifs)
+         VALUES ('CI', 'clinique', ?, 5.3546, -3.9725, ?, 'Cocody', NULL, ?, ?, 'demo', TRUE, TRUE, ?, 15000, TRUE, 30, ?, UTC_TIMESTAMP(),
+                 'Riviera Golf', 'Agrément fictif, établissement de démonstration', 'MUGEF-CI, ASCOMA, Orange Money, Wave (exemple)', ?, ?)`,
         [
             'Centre médical de démonstration',
-            'Riviera Golf (adresse fictive)',
+            'Près du golf (adresse fictive)',
             'Lun–ven 8h–17h, sam 8h–12h',
             'Établissement fictif, créé pour montrer la fiche détaillée et la prise de rendez-vous en ligne proposées aux établissements partenaires.',
             JSON.stringify(['Médecine générale', 'Pédiatrie', 'Gynécologie', 'Échographie', 'Vaccinations']),
-            JSON.stringify({ 1: semaine, 2: semaine, 3: semaine, 4: semaine, 5: semaine, 6: ['08:00-12:00'] })
+            JSON.stringify({ 1: semaine, 2: semaine, 3: semaine, 4: semaine, 5: semaine, 6: ['08:00-12:00'] }),
+            JSON.stringify([
+                { libelle: 'Consultations', horaires: '08h00 - 12h00 • 14h00 - 17h00' },
+                { libelle: 'Samedi', horaires: '08h00 - 12h00' }
+            ]),
+            JSON.stringify([
+                { libelle: 'Consultation Médecine Générale', detail: 'Heures de jour', prix: 15000 },
+                { libelle: 'Consultation Spécialiste', detail: 'Sur RDV préalable', prix: 25000 }
+            ])
         ]
     );
     const centreId = centre.insertId;

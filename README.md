@@ -10,29 +10,35 @@ Pays de départ : **Côte d'Ivoire**. Le modèle est prévu pour être repris da
 - Carte autour de soi (géolocalisation), filtres par type d'établissement et rayon de recherche (1 à 50 km).
 - Recherche par nom ou par commune, y compris à la voix sur les navigateurs compatibles.
 - Pharmacies de garde du jour.
-- Fiche de chaque établissement : adresse, téléphone, horaires, itinéraire, partage.
+- Fiche de chaque établissement : photos, adresse, téléphone, horaires par service, spécialités, tarifs indicatifs déclarés, assurances acceptées, petite carte, itinéraire, partage, signalement d'erreur.
+- Niveau de vérification affiché clairement (publié non vérifié, vérifié par l'équipe, fiche gérée par l'établissement). Une fiche n'est jamais présentée comme une certification officielle.
 - Page Urgences : SAMU (185), sapeurs-pompiers (180), police, et hôpitaux les plus proches.
-- Prise de rendez-vous en ligne chez les établissements partenaires.
+- Demande de rendez-vous chez les établissements partenaires : service souhaité, jour, plage (matin, midi, après-midi), canal de confirmation (WhatsApp, SMS, appel). Une demande « en attente de réponse » n'est jamais présentée comme une réservation confirmée. Pas de dossier médical, d'ordonnance ni de résultats.
 - Installable sur l'écran d'accueil du téléphone, comme une application.
 
 **Contribution et parrainage**
 - Tout membre peut ajouter un établissement manquant : position sur la carte, photo prise avec le téléphone, téléphone, horaires.
-- Chaque ajout est vérifié par l'équipe avant d'être publié. Des doublons possibles sont signalés à moins de 150 m.
-- Points gagnés :
-  - +10 par établissement validé ;
-  - +5 avec une photo ;
-  - +20 au parrain quand son filleul fait sa première contribution.
-- Paliers de récompense : Bronze, Argent, Or.
+- Détection de doublons pendant la saisie (nom proche à moins de 600 m, même type, ou même numéro de téléphone), et de nouveau côté équipe à moins de 150 m.
+- Une pharmacie peut être déclarée « de garde cette semaine » : la garde commence à la validation.
+- Chaque ajout est vérifié par l'équipe avant d'être publié.
+- Points gagnés (barème modifiable dans `config.js`, à fixer avant le lancement public) :
+  - +50 par établissement validé (nom, catégorie et position) ;
+  - +50 avec la photo de la devanture ou de la plaque ;
+  - +50 au parrain quand son filleul fait sa première contribution.
+- Niveaux : Éclaireur, Relais (150 points), Veilleur (300), Sentinelle (600).
+- Échange des points contre du crédit (Orange, MTN, Moov) ou un forfait Internet : 1 point = 5 FCFA, 3 échanges par mois au plus. Les points sont débités tout de suite ; l'équipe fait la recharge (ou refuse, et les points sont rendus).
 - Signalement d'une erreur sur une fiche (établissement fermé, mauvaise position…).
 
 **Offre payante pour les établissements**
 - Fiche détaillée : services proposés et prix de consultation.
 - Rendez-vous en ligne selon les horaires de consultation : créneaux calculés automatiquement, sans double réservation.
-- Compte « établissement » pour confirmer ou annuler ses rendez-vous. Le patient est prévenu dans l'application.
+- Revendication de fiche : le professionnel fournit son numéro d'ordre, de licence ou d'agrément (et une photo du document, vue seulement par l'équipe). Après contrôle, son compte devient « établissement » et la fiche « revendiquée ».
+- Compte « établissement » : modifier les informations autorisées (téléphone, horaires par service, tarifs, assurances, description) ; accepter, refuser, terminer ou marquer absent un rendez-vous. Le patient est prévenu dans l'application.
 
 **Administration (`/admin.html`)**
 - Validation et refus des contributions, avec un motif envoyé au contributeur.
 - Modification des fiches : offre partenaire, horaires de rendez-vous, déclaration des pharmacies de garde.
+- Revendications de fiches (contrôle des justificatifs) et échanges de points à traiter.
 - Gestion des rendez-vous, des signalements et des comptes.
 
 ## Données
@@ -88,7 +94,10 @@ Ils couvrent :
 - la recherche par distance, rayon et catégorie, et les pharmacies de garde ;
 - l'inscription et la connexion ;
 - les contributions (validation, refus, points, parrainage, photos) ;
-- les rendez-vous (créneau déjà pris, confirmation par l'établissement, annulation) ;
+- les rendez-vous (créneau déjà pris, demande par plage, confirmation, refus, absence, annulation) ;
+- la détection de doublons, la garde déclarée à la contribution ;
+- l'échange de points (débit, plafond mensuel, remboursement) ;
+- la revendication d'une fiche et les droits du professionnel ;
 - les droits d'accès et les signalements.
 
 ## Déploiement (Render + Aiven)

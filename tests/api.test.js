@@ -170,7 +170,7 @@ test('contribution : en attente, puis validée par l\'équipe avec points et par
     assert.equal((await fetch(`${baseUrl}/api/photos/${fiche.body.photos[0]}`)).headers.get('content-type'), 'image/png');
 
     const tableau = (await api('GET', '/api/moi/tableau', { token: filleul.token })).body;
-    assert.equal(tableau.user.points, 15);
+    assert.equal(tableau.user.points, config.POINTS.CONTRIBUTION + config.POINTS.PHOTO);
     assert.equal(tableau.notifications_non_lues, 1);
 
     const parrain = (await api('GET', '/api/moi/tableau', { token: patient.token })).body;
@@ -265,4 +265,154 @@ test('signalement d\'une erreur', async () => {
     assert.equal(ok.status, 201);
     const liste = (await api('GET', '/api/admin/signalements', { token: admin })).body;
     assert.ok(liste.some(s => s.etablissement_id === ids.dentiste && s.motif === 'ferme'));
+});
+
+test('doublons : un nom proche à quelques mètres est signalé, un nom différent non', async () => {
+    const { lat, lng } = PLATEAU;
+    const proche = await api('GET', `/api/doublons?nom=${encodeURIComponent('Pharmacie Plateau')}&lat=${lat}&lng=${lng}`);
+    assert.deepEqual(proche.body.doublons.map(d => d.nom), ['Pharmacie du Plateau']);
+    assert.ok(proche.body.doublons[0].distance < 600);
+
+    const autre = await api('GET', `/api/doublons?nom=${encodeURIComponent('Pharmacie Sainte Famille')}&lat=${lat}&lng=${lng}`);
+    assert.equal(autre.body.doublons.length, 0);
+
+    const generique = await api('GET', `/api/doublons?nom=Pharmacie&lat=${lat}&lng=${lng}`);
+    assert.equal(generique.body.doublons.length, 0, 'un mot de catégorie seul ne suffit pas');
+
+    // Même mot distinctif mais autre type d'établissement : pas un doublon
+    const autreType = await api('GET', `/api/doublons?categorie=clinique&nom=${encodeURIComponent('Clinique du Plateau')}&lat=${lat}&lng=${lng}`);
+    assert.equal(autreType.body.doublons.length, 0);
+    const memeType = await api('GET', `/api/doublons?categorie=pharmacie&nom=${encodeURIComponent('Pharmacie du Plateau')}&lat=${lat}&lng=${lng}`);
+    assert.equal(memeType.body.doublons.length, 1);
+
+    const loin = await api('GET', `/api/doublons?nom=${encodeURIComponent('Pharmacie du Plateau')}&lat=5.40&lng=-4.10`);
+    assert.equal(loin.body.doublons.length, 0, 'au-delà de 600 m');
+});
+
+test('contribution d\'une pharmacie de garde : la garde commence à la validation', async () => {
+    const ajout = await api('POST', '/api/moi/contributions', {
+        token: patient.token,
+        body: { nom: 'Pharmacie Sainte Famille', categorie: 'pharmacie', lat: 5.331, lng: -4.011, commune: 'Cocody', quartier: 'Angré 8e Tranche', garde: true }
+    });
+    assert.equal(ajout.status, 201);
+    const avant = (await api('GET', '/api/etablissements?lat=5.331&lng=-4.011&rayon=1&garde=1')).body;
+    assert.ok(!avant.items.some(e => e.nom === 'Pharmacie Sainte Famille'));
+
+    await api('POST', `/api/admin/contributions/${ajout.body.id}/valider`, { token: admin, body: {} });
+    const apres = (await api('GET', '/api/etablissements?lat=5.331&lng=-4.011&rayon=1&garde=1')).body;
+    assert.ok(apres.items.some(e => e.nom === 'Pharmacie Sainte Famille' && e.de_garde));
+    assert.equal((await api('GET', `/api/etablissements/${ajout.body.id}`)).body.quartier, 'Angré 8e Tranche');
+});
+
+test('rendez-vous par plage : demande, refus, absence, et pas de plage fermée', async () => {
+    const dispo = (await api('GET', `/api/etablissements/${ids.centre}/disponibilites`)).body.jours;
+    assert.ok(dispo.length > 0 && dispo.length <= 3);
+    const { date, plages } = dispo[0];
+    assert.equal((await api('GET', `/api/etablissements/${ids.dentiste}/disponibilites`)).status, 404);
+
+    const demande = await api('POST', '/api/moi/rendez-vous', {
+        token: patient.token,
+        body: { etablissement_id: ids.centre, date, plage: plages[0], telephone: '0711223344', canal: 'whatsapp', nom_patient: 'Aminata Touré', service: 'Pédiatrie' }
+    });
+    assert.equal(demande.status, 201);
+    assert.equal(demande.body.statut, 'en_attente');
+    assert.equal(demande.body.plage, plages[0]);
+
+    const encore = await api('POST', '/api/moi/rendez-vous', { token: patient.token, body: { etablissement_id: ids.centre, date, plage: plages[0], telephone: '0711223344' } });
+    assert.equal(encore.status, 409, 'une seule demande active par plage');
+
+    const mauvaisePlage = await api('POST', '/api/moi/rendez-vous', { token: patient.token, body: { etablissement_id: ids.centre, date, plage: 'nuit', telephone: '0711223344' } });
+    assert.equal(mauvaisePlage.status, 400);
+
+    const pro = (await api('POST', '/api/auth/connexion', { body: { identifiant: 'centre@santemap.ci', mot_de_passe: 'demo12345' } })).body.token;
+    const espace = (await api('GET', '/api/pro', { token: pro })).body;
+    const vue = espace.rendez_vous.find(r => r.id === demande.body.id);
+    assert.equal(vue.patient, 'Aminata Touré');
+    assert.equal(vue.canal, 'whatsapp');
+
+    // Une demande non confirmée ne peut être ni terminée ni marquée absente
+    assert.equal((await api('PATCH', `/api/pro/rendez-vous/${demande.body.id}`, { token: pro, body: { statut: 'absent' } })).status, 400);
+    assert.equal((await api('PATCH', `/api/pro/rendez-vous/${demande.body.id}`, { token: pro, body: { statut: 'refuse', message: 'Médecin absent ce jour-là' } })).status, 200);
+    assert.equal((await api('PATCH', `/api/pro/rendez-vous/${demande.body.id}`, { token: pro, body: { statut: 'confirme' } })).status, 400, 'une demande refusée est close');
+
+    const notifs = (await api('GET', '/api/moi/notifications', { token: patient.token })).body;
+    assert.ok(notifs.some(n => n.titre === 'Rendez-vous refusé' && n.message.includes('Médecin absent')));
+
+    const seconde = await api('POST', '/api/moi/rendez-vous', { token: patient.token, body: { etablissement_id: ids.centre, date, plage: plages[0], telephone: '0711223344' } });
+    await api('PATCH', `/api/pro/rendez-vous/${seconde.body.id}`, { token: pro, body: { statut: 'confirme' } });
+    assert.equal((await api('PATCH', `/api/pro/rendez-vous/${seconde.body.id}`, { token: pro, body: { statut: 'absent' } })).status, 200);
+    const tableau = (await api('GET', '/api/moi/tableau', { token: patient.token })).body;
+    assert.equal(tableau.rendez_vous.find(r => r.id === seconde.body.id).statut, 'absent');
+});
+
+test('échange de points : débit immédiat, plafond, remboursement en cas de refus', async () => {
+    const membre = (await api('POST', '/api/auth/inscription', { body: { nom: 'Koffi Yao', telephone: '0101010101', mot_de_passe: 'motdepasse3' } })).body;
+    await query('UPDATE users SET points = 500 WHERE id = ?', [membre.user.id]);
+
+    assert.equal((await api('POST', '/api/moi/echanges', { token: membre.token, body: { offre: 'inconnue', telephone: '0101010101' } })).status, 400);
+    const ok = await api('POST', '/api/moi/echanges', { token: membre.token, body: { offre: 'orange', telephone: '0101010101' } });
+    assert.equal(ok.status, 201);
+    assert.equal(ok.body.points, 300);
+
+    const trop = await api('POST', '/api/moi/echanges', { token: membre.token, body: { offre: 'moov', telephone: '0101010101' } });
+    assert.equal(trop.status, 400, 'il manque des points');
+    assert.match(trop.body.error, /100 points/);
+
+    const liste = (await api('GET', '/api/admin/echanges', { token: admin })).body;
+    const echange = liste.find(x => x.membre === 'Koffi Yao');
+    assert.ok(echange);
+    assert.equal((await api('POST', `/api/admin/echanges/${echange.id}/traiter`, { token: admin, body: { statut: 'refuse' } })).status, 200);
+    assert.equal((await api('GET', '/api/moi/tableau', { token: membre.token })).body.user.points, 500, 'points rendus');
+    assert.equal((await api('POST', `/api/admin/echanges/${echange.id}/traiter`, { token: admin, body: { statut: 'effectue' } })).status, 404, 'déjà traité');
+
+    // Le plafond mensuel ne compte pas les échanges refusés : trois échanges passent, le quatrième est bloqué
+    await query('UPDATE users SET points = 5000 WHERE id = ?', [membre.user.id]);
+    for (let i = 0; i < config.ECHANGES_MAX_PAR_MOIS; i++) {
+        assert.equal((await api('POST', '/api/moi/echanges', { token: membre.token, body: { offre: 'orange', telephone: '0101010101' } })).status, 201);
+    }
+    assert.equal((await api('POST', '/api/moi/echanges', { token: membre.token, body: { offre: 'orange', telephone: '0101010101' } })).status, 429, 'plafond mensuel');
+});
+
+test('revendication d\'une fiche : contrôle par l\'équipe, puis droits du professionnel', async () => {
+    const pro = (await api('POST', '/api/auth/inscription', { body: { nom: 'Dr Brou', telephone: '0505050505', mot_de_passe: 'motdepasse4' } })).body;
+    const sansJustificatif = await api('POST', '/api/moi/revendications', { token: pro.token, body: { etablissement_id: ids.hopital, nom: 'Dr Brou', fonction: 'Directeur', telephone: '0505050505' } });
+    assert.equal(sansJustificatif.status, 400);
+
+    const demande = await api('POST', '/api/moi/revendications', {
+        token: pro.token,
+        body: { etablissement_id: ids.hopital, nom: 'Dr Brou', fonction: 'Directeur', telephone: '0505050505', justificatif: 'Ordre des médecins n° 1234', piece: PNG }
+    });
+    assert.equal(demande.status, 201);
+    assert.equal((await api('POST', '/api/moi/revendications', { token: pro.token, body: { etablissement_id: ids.hopital, nom: 'Dr Brou', fonction: 'Directeur', telephone: '0505050505', justificatif: 'x' } })).status, 409, 'demande déjà en cours');
+
+    // Avant l'approbation, le compte n'a aucun droit sur la fiche
+    assert.equal((await api('PATCH', '/api/pro/fiche', { token: pro.token, body: { telephone: '0102' } })).status, 403);
+    assert.equal((await api('GET', '/api/admin/revendications', { token: pro.token })).status, 403);
+
+    const liste = (await api('GET', '/api/admin/revendications', { token: admin })).body;
+    const r = liste.find(x => x.etablissement_id === ids.hopital);
+    assert.ok(r && r.piece);
+    assert.equal((await fetch(`${baseUrl}/api/admin/revendications/${r.id}/piece`, { headers: { Authorization: `Bearer ${admin}` } })).headers.get('content-type'), 'image/png');
+    assert.equal((await fetch(`${baseUrl}/api/admin/revendications/${r.id}/piece`)).status, 401);
+
+    assert.equal((await api('POST', `/api/admin/revendications/${r.id}/approuver`, { token: admin })).status, 200);
+    const connecte = (await api('POST', '/api/auth/connexion', { body: { identifiant: '0505050505', mot_de_passe: 'motdepasse4' } })).body;
+    assert.equal(connecte.user.role, 'etablissement');
+
+    const maj = await api('PATCH', '/api/pro/fiche', {
+        token: connecte.token,
+        body: { telephone: '27 22 44 00 00', horaires_detail: [{ libelle: 'Urgences', horaires: '24h / 24' }], tarifs: [{ libelle: 'Consultation', detail: 'Jour', prix: 20000 }, { libelle: 'Sans prix' }], assurances: 'MUGEF-CI' }
+    });
+    assert.equal(maj.status, 200);
+    const fiche = (await api('GET', `/api/etablissements/${ids.hopital}`)).body;
+    assert.equal(fiche.revendique, true);
+    assert.deepEqual(fiche.horaires_detail, [{ libelle: 'Urgences', horaires: '24h / 24' }]);
+    assert.deepEqual(fiche.tarifs, [{ libelle: 'Consultation', detail: 'Jour', prix: 20000 }]);
+    assert.equal(fiche.assurances, 'MUGEF-CI');
+
+    // Elle ne peut plus être revendiquée, et le professionnel ne peut pas changer le nom
+    const autre = (await api('POST', '/api/auth/inscription', { body: { nom: 'Autre', telephone: '0606060606', mot_de_passe: 'motdepasse5' } })).body;
+    assert.equal((await api('POST', '/api/moi/revendications', { token: autre.token, body: { etablissement_id: ids.hopital, nom: 'A', fonction: 'B', telephone: '0606060606', justificatif: 'x' } })).status, 409);
+    await api('PATCH', '/api/pro/fiche', { token: connecte.token, body: { nom: 'Piraté' } });
+    assert.equal((await api('GET', `/api/etablissements/${ids.hopital}`)).body.nom, 'Hôpital du Centre');
 });
