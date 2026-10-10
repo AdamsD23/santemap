@@ -39,6 +39,13 @@ module.exports = {
     // Comptes et établissement de démonstration
     SEED_DEMO: bool(process.env.SEED_DEMO, !IS_PRODUCTION),
 
+    // E-mails de notification (rendez-vous, contributions, échanges). Sans SMTP_HOST, aucun e-mail n'est envoyé.
+    SMTP_HOST: process.env.SMTP_HOST || '',
+    SMTP_PORT: Number(process.env.SMTP_PORT || 587),
+    SMTP_USER: process.env.SMTP_USER || '',
+    SMTP_PASSWORD: process.env.SMTP_PASSWORD || '',
+    MAIL_FROM: process.env.MAIL_FROM || 'SantéMap <no-reply@santemap.ci>',
+
     PAYS_DEFAUT: (process.env.PAYS_DEFAUT || 'CI').toUpperCase(),
 
     // Points gagnés par les contributeurs : 50 pour un établissement validé (nom 20 + position 30,

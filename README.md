@@ -15,6 +15,7 @@ Pays de départ : **Côte d'Ivoire**. Le modèle est prévu pour être repris da
 - Page Urgences : SAMU (185), sapeurs-pompiers (180), police, et hôpitaux les plus proches.
 - Demande de rendez-vous chez les établissements partenaires : service souhaité, jour, plage (matin, midi, après-midi), canal de confirmation (WhatsApp, SMS, appel). Une demande « en attente de réponse » n'est jamais présentée comme une réservation confirmée. Pas de dossier médical, d'ordonnance ni de résultats.
 - Installable sur l'écran d'accueil du téléphone, comme une application.
+- Notifications dans l'application, avec une copie par e-mail pour les comptes qui ont une adresse (rendez-vous confirmé ou refusé, contribution validée, échange de points…). Il suffit de renseigner `SMTP_HOST` et les variables `SMTP_*` ; sans elles, aucun e-mail n'est envoyé. Les SMS et WhatsApp ne sont pas encore branchés.
 
 **Contribution et parrainage**
 - Tout membre peut ajouter un établissement manquant : position sur la carte, photo prise avec le téléphone, téléphone, horaires.

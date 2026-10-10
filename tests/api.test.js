@@ -416,3 +416,45 @@ test('revendication d\'une fiche : contrôle par l\'équipe, puis droits du prof
     await api('PATCH', '/api/pro/fiche', { token: connecte.token, body: { nom: 'Piraté' } });
     assert.equal((await api('GET', `/api/etablissements/${ids.hopital}`)).body.nom, 'Hôpital du Centre');
 });
+
+test('e-mails : copie des notifications aux comptes qui ont une adresse, sans jamais bloquer l\'action', async () => {
+    const { utiliserTransport } = require('../lib/mail');
+    const envoyes = [];
+    let panne = false;
+    utiliserTransport({ sendMail: async m => { if (panne) throw new Error('SMTP indisponible'); envoyes.push(m); } });
+    const attendre = async n => { for (let i = 0; i < 50 && envoyes.length < n; i++) await new Promise(r => setTimeout(r, 20)); };
+
+    const avecEmail = (await api('POST', '/api/auth/inscription', { body: { nom: 'Mariam <b>Sidibé</b>', telephone: '0808080808', email: 'mariam@exemple.ci', mot_de_passe: 'motdepasse6' } })).body;
+    const sansEmail = (await api('POST', '/api/auth/inscription', { body: { nom: 'Issa Traoré', telephone: '0909090909', mot_de_passe: 'motdepasse7' } })).body;
+
+    const dispo = (await api('GET', `/api/etablissements/${ids.centre}/disponibilites`)).body.jours;
+    const demande = (jeton, plage) => api('POST', '/api/moi/rendez-vous', { token: jeton, body: { etablissement_id: ids.centre, date: dispo[0].date, plage, telephone: '0808080808' } });
+
+    const rdv = await demande(avecEmail.token, dispo[0].plages[0]);
+    assert.equal(rdv.status, 201);
+    await attendre(1);
+    assert.equal(envoyes.length, 1);
+    assert.equal(envoyes[0].to, 'mariam@exemple.ci');
+    assert.match(envoyes[0].subject, /Demande de rendez-vous envoyée/);
+    assert.ok(!envoyes[0].html.includes('<b>Sidibé'), 'le contenu est échappé');
+
+    const pro = (await api('POST', '/api/auth/connexion', { body: { identifiant: 'centre@santemap.ci', mot_de_passe: 'demo12345' } })).body.token;
+    await api('PATCH', `/api/pro/rendez-vous/${rdv.body.id}`, { token: pro, body: { statut: 'refuse', message: 'Complet ce jour-là' } });
+    await attendre(2);
+    assert.match(envoyes[1].subject, /Rendez-vous refusé/);
+    assert.match(envoyes[1].text, /Complet ce jour-là/);
+
+    // Pas d'adresse : seulement la notification dans l'application
+    await demande(sansEmail.token, dispo[0].plages[0]);
+    await new Promise(r => setTimeout(r, 150));
+    assert.equal(envoyes.length, 2);
+    assert.equal((await api('GET', '/api/moi/notifications', { token: sansEmail.token })).body.length, 1);
+
+    // Un serveur de mail en panne ne bloque ni la demande ni la notification
+    panne = true;
+    const rdv2 = await demande(avecEmail.token, dispo[0].plages.at(-1));
+    assert.equal(rdv2.status, 201);
+    await new Promise(r => setTimeout(r, 150));
+    assert.equal((await api('GET', '/api/moi/notifications', { token: avecEmail.token })).body.length, 3);
+    utiliserTransport(undefined);
+});
